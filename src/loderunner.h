@@ -100,6 +100,25 @@ struct player {
   entity Entity;
 };
 
+#define LEVEL_WIDTH 35
+#define LEVEL_HEIGHT 14
+
+struct level {
+  int Width;
+  int Height;
+  int Contents[LEVEL_HEIGHT][LEVEL_WIDTH];
+};
+
+enum {
+  LVL_BLANK,
+  LVL_BRICK,
+  LVL_LADDER,
+  LVL_WIN_LADDER,
+  LVL_TREASURE,
+  LVL_ENEMY,
+  LVL_PLAYER,
+};
+
 struct file_read_result {
   void *Memory;
   u64 MemorySize;

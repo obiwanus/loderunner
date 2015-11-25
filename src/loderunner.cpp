@@ -8,6 +8,7 @@ global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
 global entity *Player;
+global level *Level;
 
 inline int TruncateReal32(r32 Value) {
   int Result = (int)Value;
@@ -242,79 +243,31 @@ internal bmp_file DEBUGReadBMPFile(char *Filename) {
   return Result;
 }
 
-internal void InitEntity(entity *Entity, char *ImgPath, v2 Position,
-                         v2 Velocity, v2 Center, int Radius, r32 Mass) {
-  bmp_file BMPFile = DEBUGReadBMPFile(ImgPath);
-  Entity->Image = BMPFile;
-  Entity->Position = Position;
-  Entity->Velocity = Velocity;
-
-  Entity->Center = Center;
-  Entity->Radius = Radius;
-  Entity->Mass = Mass;
-  Entity->NotJumped = true;
-}
-
-internal void CollideWithWalls(entity *Entity) {
-  r32 MinX = (r32)GameBackBuffer->Width * 0.05f;
-  r32 MinY = 0.0f;
-  r32 MaxX = (r32)GameBackBuffer->Width * 0.95f - (r32)Entity->Image.Width;
-  r32 MaxY = (r32)GameBackBuffer->Height * 0.95f - (r32)Entity->Image.Height;
-
-  if (Entity->Position.x < MinX) {
-    Entity->Position.x = MinX;
-    Entity->Velocity.x = -Entity->Velocity.x;
-  }
-  if (Entity->Position.y < MinY) {
-    Entity->Position.y = MinY;
-    Entity->Velocity.y = -Entity->Velocity.y;
-  }
-  if (Entity->Position.x > MaxX) {
-    Entity->Position.x = MaxX;
-    Entity->Velocity.x = -Entity->Velocity.x;
-  }
-  if (Entity->Position.y > MaxY) {
-    Entity->Position.y = MaxY;
-    Entity->Velocity.y = -Entity->Velocity.y;
-    Entity->NotJumped = true;
-  }
-}
-
-internal void LimitVelocity(entity *Entity, r32 Max) {
-  if (Entity->Velocity.x > Max) Entity->Velocity.x = Max;
-  if (Entity->Velocity.x < -Max) Entity->Velocity.x = -Max;
-  if (Entity->Velocity.y > Max) Entity->Velocity.y = Max;
-  if (Entity->Velocity.y < -Max) Entity->Velocity.y = -Max;
-}
-
-internal void DEBUGDrawEntity(entity *Entity) {
-  // Draw the shadow
-  v2 ShadowPosition = Entity->Position + Entity->Center;
-  ShadowPosition.y = (r32)GameBackBuffer->Height * 0.95f - 5.0f;  // floor
-  int Width = Entity->Image.Width -
-              (int)((r32)Entity->Image.Width * 0.6f *
-                    ((r32)(ShadowPosition.y - Entity->Position.y)) /
-                    (r32)GameBackBuffer->Height);
-  DEBUGDrawEllipse(ShadowPosition, Width, Width / 5, 0x00111111);
-
-  // Draw the entity
-  DEBUGDrawCircle(Entity->Position, Entity->Radius, 0x00FF0000);
-}
-
-internal bool32
-Collides(v2 Center, int Radius, v2 RectCorner, int RectWidth, int RectHeight) {
-  // Detects collisions betweer a ball and a rect
-  if ((Center.x - (r32)Radius) > (RectCorner.x + (r32)RectWidth)) return false;
-  if ((Center.x + (r32)Radius) < RectCorner.x) return false;
-  if ((Center.y + (r32)Radius) < RectCorner.y) return false;
-
-  return true;
-}
-
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
   GameMemory = Memory;
+
+  if (!Level) {
+    Level = (level *)GameMemoryAlloc(sizeof(level));
+    // Fixed level size
+    Level->Width = LEVEL_WIDTH;
+    Level->Height = LEVEL_HEIGHT;
+    // Load level
+    {
+      char *Filename = "levels/level_1.txt";
+      file_read_result FileReadResult =
+          GameMemory->DEBUGPlatformReadEntireFile(Filename);
+      char *String = (char *)FileReadResult.Memory;
+      int Column = 0;
+      int Row = 0;
+      for (int i = 0; i < FileReadResult.MemorySize; i++) {
+        char Symbol = String[i];
+        if (Symbol == ' ')
+          Level->Contents[Row][Column] = LVL_BLANK;
+      }
+    }
+  }
 
   if (!Player) {
     Player = (entity *)GameMemoryAlloc(sizeof(entity));
@@ -331,43 +284,4 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Fill background
   DEBUGDrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
                      0x00002222);  // OMG
-
-  // Update Player
-  {
-    v2 Direction = {};
-    player_input *Input = &NewInput->Players[0];
-
-    if (Input->Up.EndedDown && Player->NotJumped) Direction.y -= 2.0f;
-    if (Input->Right.EndedDown) Direction.x += 1.0f;
-    if (Input->Left.EndedDown) Direction.x -= 1.0f;
-
-    if (Direction.x != 0 && Direction.y != 0) {
-      Direction *= 0.70710678118f;
-    }
-
-    Direction *= 0.25f;                         // speed, px/ms
-    Direction.x -= 0.2f * Player->Velocity.x;   // friction
-    Direction.y -= 0.05f * Player->Velocity.y;  // friction
-
-    Player->Velocity += Direction;
-
-    r32 FloorY = (r32)GameBackBuffer->Height * 0.95f - (r32)Player->Image.Height;
-    if (Player->Position.y <= (FloorY - Player->Image.Height / 2)) {
-      Player->Velocity.y += 0.1f;  // gravity
-    }
-
-    Player->Position += Player->Velocity * NewInput->dtForFrame;
-
-    CollideWithWalls(Player);
-
-    r32 MaxJump = (r32)GameBackBuffer->Height * 0.5f;
-    if (Player->Position.y <= MaxJump) {
-      Player->NotJumped = false;
-    }
-
-    LimitVelocity(Player, 1.0f);
-
-  }
-
-  DEBUGDrawEntity(Player);
 }
