@@ -250,21 +250,79 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
-    // Fixed level size
-    Level->Width = LEVEL_WIDTH;
-    Level->Height = LEVEL_HEIGHT;
     // Load level
     {
       char *Filename = "levels/level_1.txt";
       file_read_result FileReadResult =
           GameMemory->DEBUGPlatformReadEntireFile(Filename);
+
       char *String = (char *)FileReadResult.Memory;
+
+      // Get level size
+      {
+        int MaxWidth = 0;
+        int Width = 0;
+        int Height = 1;
+        for (int i = 0; i < FileReadResult.MemorySize; i++) {
+          char Symbol = String[i];
+          if (Symbol == '\n') {
+            if (MaxWidth < Width) {
+              MaxWidth = Width;
+            }
+            Width = 0;
+            Height += 1;
+          } else if (Symbol != '\r') {
+            Width += 1;
+          }
+        }
+        Level->Width = MaxWidth;
+        Level->Height = Height;
+      }
+
       int Column = 0;
       int Row = 0;
       for (int i = 0; i < FileReadResult.MemorySize; i++) {
         char Symbol = String[i];
-        if (Symbol == ' ')
-          Level->Contents[Row][Column] = LVL_BLANK;
+        int Value = LVL_BLANK;
+        bool32 PlayerSet = false;
+
+        if (Symbol == '|')
+          Value = LVL_WIN_LADDER;
+        else if (Symbol == 't')
+          Value = LVL_TREASURE;
+        else if (Symbol == '=')
+          Value = LVL_BRICK;
+        else if (Symbol == '#')
+          Value = LVL_LADDER;
+        else if (Symbol == '-')
+          Value = LVL_ROPE;
+        else if (Symbol == 'e')
+          Value = LVL_ENEMY;
+        else if (Symbol == 'p' && !PlayerSet)
+          Value = LVL_PLAYER;
+
+        if (Symbol == '\n') {
+          Column = 0;
+          ++Row;
+        } else if (Symbol != '\r') {
+          Assert(Column < Level->Width);
+          Assert(Row < Level->Height);
+          Level->Contents[Row][Column] = Value;
+          ++Column;
+        }
+      }
+    }
+
+    // Draw level
+    int kCellSize = 20;
+    for (int Row = 0; Row < Level->Height; ++Row) {
+      for (int Col = 0; Col < Level->Width; ++Col) {
+        v2 Position = {};
+        Position.x = (r32)(Col * kCellSize);
+        Position.y = (r32)(Row * kCellSize);
+        if (!Level->Contents[Row][Col] == LVL_BLANK) {
+          DEBUGDrawRectangle(Position, kCellSize, kCellSize, 0x000000FF);
+        }
       }
     }
   }
@@ -280,8 +338,4 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Player->Mass = 10;
     Player->NotJumped = true;
   }
-
-  // Fill background
-  DEBUGDrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
-                     0x00002222);  // OMG
 }

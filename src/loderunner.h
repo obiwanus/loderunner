@@ -100,13 +100,13 @@ struct player {
   entity Entity;
 };
 
-#define LEVEL_WIDTH 35
-#define LEVEL_HEIGHT 14
+#define MAX_LEVEL_HEIGHT 100
+#define MAX_LEVEL_WIDTH 100
 
 struct level {
   int Width;
   int Height;
-  int Contents[LEVEL_HEIGHT][LEVEL_WIDTH];
+  int Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
 };
 
 enum {
@@ -114,6 +114,7 @@ enum {
   LVL_BRICK,
   LVL_LADDER,
   LVL_WIN_LADDER,
+  LVL_ROPE,
   LVL_TREASURE,
   LVL_ENEMY,
   LVL_PLAYER,
