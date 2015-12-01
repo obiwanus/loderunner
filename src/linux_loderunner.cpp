@@ -1,8 +1,8 @@
 #include "loderunner_platform.h"
 
-#include "loderunner.h"
+#include <X11/Xlib.h>
 
-#include "win32_loderunner.h"
+#include "loderunner.h"
 
 global bool GlobalRunning;
 
@@ -42,7 +42,12 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
 }
 
 int main(int argc, char const *argv[]) {
-  // TODO
+
+  Display *display;
+  Window window;
+  XEvent event;
+  char const *msg = "Hello, World!";
+  int screen;
+
   return 0;
 }
-
