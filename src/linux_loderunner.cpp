@@ -1,6 +1,9 @@
 #include "loderunner_platform.h"
 
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
+// #include <X11/Xos.h>
+#include <stdio.h>
 
 #include "loderunner.h"
 
@@ -42,12 +45,39 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
 }
 
 int main(int argc, char const *argv[]) {
-
   Display *display;
   Window window;
   XEvent event;
-  char const *msg = "Hello, World!";
   int screen;
+
+  display = XOpenDisplay(0);
+  if (display == 0) {
+    fprintf(stderr, "Cannot open display\n");
+    return 1;
+  }
+
+  screen = DefaultScreen(display);
+  window = XCreateSimpleWindow(display, RootWindow(display, screen), 300, 300,
+                               500, 500, 1, BlackPixel(display, screen),
+                               WhitePixel(display, screen));
+
+  XSetStandardProperties(display,window, "My Window", "Hi!", None, NULL, 0, NULL);
+
+  XSelectInput(display, window, ExposureMask | KeyPressMask);
+  XMapWindow(display, window);
+
+  while (1) {
+    XNextEvent(display, &event);
+    if (event.type == Expose) {
+      XFillRectangle(display, window, DefaultGC(display, screen), 20, 20, 10,
+                     10);
+    }
+    if (event.type == KeyPress) {
+      break;
+    }
+  }
+
+  XCloseDisplay(display);
 
   return 0;
 }
