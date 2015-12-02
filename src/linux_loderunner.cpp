@@ -5,6 +5,10 @@
 // #include <X11/Xos.h>
 #include <stdio.h>
 
+#if BUILD_SLOW
+#include <signal.h>
+#endif
+
 #include "loderunner.h"
 
 global bool GlobalRunning;
@@ -48,6 +52,8 @@ int main(int argc, char const *argv[]) {
   Display *display;
   Window window;
   XEvent event;
+  KeySym key;
+  char buf[256];
   int screen;
 
   display = XOpenDisplay(0);
@@ -61,19 +67,37 @@ int main(int argc, char const *argv[]) {
                                500, 500, 1, BlackPixel(display, screen),
                                WhitePixel(display, screen));
 
-  XSetStandardProperties(display,window, "My Window", "Hi!", None, NULL, 0, NULL);
+  XSetStandardProperties(display, window, "My Window", "Hi!", None, NULL, 0,
+                         NULL);
 
-  XSelectInput(display, window, ExposureMask | KeyPressMask);
+  XSelectInput(display, window, ExposureMask | KeyPressMask | ButtonPressMask);
   XMapWindow(display, window);
 
-  while (1) {
+  Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
+  XSetWMProtocols(display, window, &wmDeleteMessage, 1);
+
+  GlobalRunning = true;
+
+  while (GlobalRunning) {
     XNextEvent(display, &event);
     if (event.type == Expose) {
       XFillRectangle(display, window, DefaultGC(display, screen), 20, 20, 10,
                      10);
     }
-    if (event.type == KeyPress) {
-      break;
+    if (event.type == KeyPress &&
+        XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
+      char symbol = buf[0];
+      if (symbol == 'q') {
+        GlobalRunning = false;
+      }
+    }
+    if (event.type == ButtonPress) {
+      printf("Click at (%i, %i)\n", event.xbutton.x, event.xbutton.y);
+    }
+    if (event.type == ClientMessage) {
+      if (event.xclient.data.l[0] == wmDeleteMessage) {
+        GlobalRunning = false;
+      }
     }
   }
 
