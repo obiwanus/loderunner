@@ -291,8 +291,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   QueryPerformanceFrequency(&GlobalPerformanceFrequency);
 
   if (RegisterClass(&WindowClass)) {
-    int WindowWidth = 1024;
-    int WindowHeight = 768;
+    int WindowWidth = 1500;
+    int WindowHeight = 1000;
 
     HWND Window = CreateWindow(WindowClass.lpszClassName, 0,
                                WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT,

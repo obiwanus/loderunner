@@ -9,6 +9,7 @@ global game_memory *GameMemory;
 
 global entity *Player;
 global level *Level;
+global sprites *Sprites;
 
 inline int TruncateReal32(r32 Value) {
   int Result = (int)Value;
@@ -160,9 +161,9 @@ internal void DEBUGDrawEllipse(v2 Center, int Width, int Height, u32 Color) {
   }
 }
 
-internal void DEBUGDrawImage(v2 Position, bmp_file Image) {
-  int Width = Image.Width;
-  int Height = Image.Width;
+internal void DEBUGDrawImage(v2 Position, bmp_file *Image) {
+  int Width = Image->Width;
+  int Height = Image->Height;
   int X = (int)Position.x;
   int Y = (int)Position.y;
 
@@ -170,7 +171,7 @@ internal void DEBUGDrawImage(v2 Position, bmp_file Image) {
   u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
             X * GameBackBuffer->BytesPerPixel;
   u32 *SrcRow =
-      (u32 *)Image.Bitmap + Height * Width - Width;  // bottom row first
+      (u32 *)Image->Bitmap + Height * Width - Width;  // bottom row first
 
   for (int pY = Y; pY < Y + Height; pY++) {
     int *Pixel = (int *)Row;
@@ -178,10 +179,10 @@ internal void DEBUGDrawImage(v2 Position, bmp_file Image) {
 
     for (int pX = X; pX < X + Width; pX++) {
       // TODO: bmp may not be masked
-      u8 Red = UnmaskColor(*SrcPixel, Image.RedMask);
-      u8 Green = UnmaskColor(*SrcPixel, Image.GreenMask);
-      u8 Blue = UnmaskColor(*SrcPixel, Image.BlueMask);
-      u8 Alpha = UnmaskColor(*SrcPixel, Image.AlphaMask);
+      u8 Red = UnmaskColor(*SrcPixel, Image->RedMask);
+      u8 Green = UnmaskColor(*SrcPixel, Image->GreenMask);
+      u8 Blue = UnmaskColor(*SrcPixel, Image->BlueMask);
+      u8 Alpha = UnmaskColor(*SrcPixel, Image->AlphaMask);
 
       u32 ResultingColor = Red << 16 | Green << 8 | Blue;
 
@@ -222,6 +223,8 @@ internal bmp_file DEBUGReadBMPFile(char *Filename) {
   file_read_result FileReadResult =
       GameMemory->DEBUGPlatformReadEntireFile(Filename);
 
+  Assert(FileReadResult.MemorySize > 0);
+
   bmp_file_header *BMPFileHeader = (bmp_file_header *)FileReadResult.Memory;
   bmp_info_header *BMPInfoHeader =
       (bmp_info_header *)((u8 *)FileReadResult.Memory +
@@ -239,6 +242,13 @@ internal bmp_file DEBUGReadBMPFile(char *Filename) {
     Result.BlueMask = BMPInfoHeader->biBlueMask;
     Result.AlphaMask = BMPInfoHeader->biAlphaMask;
   }
+
+  return Result;
+}
+
+internal bmp_file *LoadSprite(char *Filename) {
+  bmp_file *Result = (bmp_file *)GameMemoryAlloc(sizeof(bmp_file));
+  *Result = DEBUGReadBMPFile(Filename);
 
   return Result;
 }
@@ -311,17 +321,37 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           ++Column;
         }
       }
+
+      // Load sprites
+      {
+        Sprites = (sprites *)GameMemoryAlloc(sizeof(sprites));
+        Sprites->Brick = LoadSprite("img/brick.bmp");
+        Sprites->BrickHard = LoadSprite("img/brick-hard.bmp");
+        Sprites->Ladder = LoadSprite("img/ladder.bmp");
+        Sprites->Rope = LoadSprite("img/rope.bmp");
+        Sprites->Treasure = LoadSprite("img/treasure.bmp");
+      }
     }
 
     // Draw level
-    int kCellSize = 20;
+    DEBUGDrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height, 0x000A0D0B);
+
+    int kCellWidth = 32;
+    int kCellHeight = 32;
     for (int Row = 0; Row < Level->Height; ++Row) {
       for (int Col = 0; Col < Level->Width; ++Col) {
         v2 Position = {};
-        Position.x = (r32)(Col * kCellSize);
-        Position.y = (r32)(Row * kCellSize);
-        if (!Level->Contents[Row][Col] == LVL_BLANK) {
-          DEBUGDrawRectangle(Position, kCellSize, kCellSize, 0x000000FF);
+        Position.x = (r32)(Col * kCellWidth);
+        Position.y = (r32)(Row * kCellHeight);
+        int Value = Level->Contents[Row][Col];
+        if (Value == LVL_BRICK) {
+          DEBUGDrawImage(Position, Sprites->Brick);
+        } else if (Value == LVL_LADDER) {
+          DEBUGDrawImage(Position, Sprites->Ladder);
+        } else if (Value == LVL_ROPE) {
+          DEBUGDrawImage(Position, Sprites->Rope);
+        } else if (Value == LVL_TREASURE) {
+          DEBUGDrawImage(Position, Sprites->Treasure);
         }
       }
     }

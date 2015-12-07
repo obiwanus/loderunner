@@ -120,6 +120,14 @@ enum {
   LVL_PLAYER,
 };
 
+struct sprites {
+  bmp_file *Brick;
+  bmp_file *BrickHard;
+  bmp_file *Ladder;
+  bmp_file *Rope;
+  bmp_file *Treasure;
+};
+
 struct file_read_result {
   void *Memory;
   u64 MemorySize;
