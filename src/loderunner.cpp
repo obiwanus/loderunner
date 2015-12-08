@@ -7,9 +7,12 @@
 global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
-global entity *Player;
+global player *Player;
 global level *Level;
 global sprites *Sprites;
+
+global int kTileWidth = 32;
+global int kTileHeight = 32;
 
 inline int TruncateReal32(r32 Value) {
   int Result = (int)Value;
@@ -253,11 +256,51 @@ internal bmp_file *LoadSprite(char *Filename) {
   return Result;
 }
 
+void DrawTile(int Col, int Row) {
+  v2 Position = {};
+  Position.x = (r32)(Col * kTileWidth);
+  Position.y = (r32)(Row * kTileHeight);
+  int Value = Level->Contents[Row][Col];
+  if (Value == LVL_BRICK) {
+    DEBUGDrawImage(Position, Sprites->Brick);
+  } else if (Value == LVL_LADDER) {
+    DEBUGDrawImage(Position, Sprites->Ladder);
+  } else if (Value == LVL_ROPE) {
+    DEBUGDrawImage(Position, Sprites->Rope);
+  } else if (Value == LVL_TREASURE) {
+    DEBUGDrawImage(Position, Sprites->Treasure);
+  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY) {
+    DEBUGDrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
+  }
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
   GameMemory = Memory;
 
+  // Load sprites
+  if (!Sprites) {
+    kTileWidth = 32;
+    kTileHeight = 32;
+
+    Sprites = (sprites *)GameMemoryAlloc(sizeof(sprites));
+    Sprites->Brick = LoadSprite("img/brick.bmp");
+    Sprites->BrickHard = LoadSprite("img/brick-hard.bmp");
+    Sprites->Ladder = LoadSprite("img/ladder.bmp");
+    Sprites->Rope = LoadSprite("img/rope.bmp");
+    Sprites->Treasure = LoadSprite("img/treasure.bmp");
+    Sprites->HeroLeft = LoadSprite("img/hero-left.bmp");
+    Sprites->HeroRight = LoadSprite("img/hero-right.bmp");
+  }
+
+  // Init player
+  if (!Player) {
+    Player = (player *)GameMemoryAlloc(sizeof(player));
+    Player->Sprite = Sprites->HeroRight;
+  }
+
+  // Init level
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
     // Load level
@@ -308,8 +351,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Value = LVL_ROPE;
         else if (Symbol == 'e')
           Value = LVL_ENEMY;
-        else if (Symbol == 'p' && !PlayerSet)
+        else if (Symbol == 'p' && !PlayerSet) {
           Value = LVL_PLAYER;
+          Player->TileX = Column;
+          Player->TileY = Row;
+          Player->X = (r32)(Player->TileX * kTileWidth);
+          Player->Y = (r32)(Player->TileY * kTileHeight);
+          PlayerSet = true;
+        }
 
         if (Symbol == '\n') {
           Column = 0;
@@ -321,51 +370,64 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           ++Column;
         }
       }
-
-      // Load sprites
-      {
-        Sprites = (sprites *)GameMemoryAlloc(sizeof(sprites));
-        Sprites->Brick = LoadSprite("img/brick.bmp");
-        Sprites->BrickHard = LoadSprite("img/brick-hard.bmp");
-        Sprites->Ladder = LoadSprite("img/ladder.bmp");
-        Sprites->Rope = LoadSprite("img/rope.bmp");
-        Sprites->Treasure = LoadSprite("img/treasure.bmp");
-      }
     }
 
     // Draw level
-    DEBUGDrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height, 0x000A0D0B);
+    DEBUGDrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
+                       0x000A0D0B);
 
-    int kCellWidth = 32;
-    int kCellHeight = 32;
     for (int Row = 0; Row < Level->Height; ++Row) {
       for (int Col = 0; Col < Level->Width; ++Col) {
-        v2 Position = {};
-        Position.x = (r32)(Col * kCellWidth);
-        Position.y = (r32)(Row * kCellHeight);
-        int Value = Level->Contents[Row][Col];
-        if (Value == LVL_BRICK) {
-          DEBUGDrawImage(Position, Sprites->Brick);
-        } else if (Value == LVL_LADDER) {
-          DEBUGDrawImage(Position, Sprites->Ladder);
-        } else if (Value == LVL_ROPE) {
-          DEBUGDrawImage(Position, Sprites->Rope);
-        } else if (Value == LVL_TREASURE) {
-          DEBUGDrawImage(Position, Sprites->Treasure);
-        }
+        DrawTile(Col, Row);
       }
     }
   }
 
-  if (!Player) {
-    Player = (entity *)GameMemoryAlloc(sizeof(entity));
+  // Redraw tiles covered by player
+  {
+    Player->TileX = (int)Player->X / kTileWidth;
+    Player->TileY = (int)Player->Y / kTileHeight;
+    DrawTile(Player->TileX, Player->TileY);
 
-    Player->Position = {300, 300};
-    Player->Velocity = {1, 0};
-
-    Player->Center = {36, 35};
-    Player->Radius = 32;
-    Player->Mass = 10;
-    Player->NotJumped = true;
+    // Clear the other tile that might be covered
+    if ((int)Player->X % kTileWidth != 0) {
+      DrawTile(Player->TileX + 1, Player->TileY);
+    }
+    if ((int)Player->Y % kTileHeight != 0) {
+      DrawTile(Player->TileX, Player->TileY + 1);
+    }
   }
+
+  // Update player
+  {
+    player_input *Input = &NewInput->Player2;
+
+    if (Input->Right.EndedDown) {
+      Player->X += 3.0f;
+      Player->Sprite = Sprites->HeroRight;
+    }
+    if (Input->Left.EndedDown) {
+      Player->X -= 3.0f;
+      Player->Sprite = Sprites->HeroLeft;
+    }
+
+    // Don't go away from the level
+    if (Player->X < 0) {
+      Player->X = 0;
+    }
+    if (Player->Y < 0) {
+      Player->Y = 0;
+    }
+    int MaxX = kTileWidth * (Level->Width - 1);
+    int MaxY = kTileHeight * (Level->Height - 1);
+    if (Player->X > MaxX) {
+      Player->X = (r32)MaxX;
+    }
+    if (Player->Y > MaxY) {
+      Player->Y = (r32)MaxY;
+    }
+  }
+
+  // Draw
+  { DEBUGDrawImage(Player->Position, Player->Sprite); }
 }

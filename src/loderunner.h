@@ -84,20 +84,17 @@ struct game_input {
   r32 dtForFrame;
 };
 
-struct entity {
-  v2 Position;
-  v2 Velocity;
-  bmp_file Image;
-
-  // tmp
-  v2 Center;
-  int Radius;
-  r32 Mass;
-  bool32 NotJumped;
-};
-
 struct player {
-  entity Entity;
+  union {
+    v2 Position;
+    struct {
+      r32 X;
+      r32 Y;
+    };
+  };
+  int TileX;
+  int TileY;
+  bmp_file *Sprite;
 };
 
 #define MAX_LEVEL_HEIGHT 100
@@ -126,6 +123,8 @@ struct sprites {
   bmp_file *Ladder;
   bmp_file *Rope;
   bmp_file *Treasure;
+  bmp_file *HeroLeft;
+  bmp_file *HeroRight;
 };
 
 struct file_read_result {

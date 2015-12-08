@@ -247,6 +247,9 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
         if ((VKCode == VK_F4) && AltKeyWasDown) {
           GlobalRunning = false;
         }
+        if (VKCode == VK_ESCAPE) {
+          GlobalRunning = false;
+        }
       } break;
 
       default: {
