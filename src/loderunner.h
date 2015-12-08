@@ -94,6 +94,8 @@ struct player {
   };
   int TileX;
   int TileY;
+  int Width;
+  int Height;
   bmp_file *Sprite;
 };
 

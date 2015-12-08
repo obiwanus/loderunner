@@ -7,7 +7,7 @@
 global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
-global player *Player;
+global player gPlayer;
 global level *Level;
 global sprites *Sprites;
 
@@ -221,6 +221,13 @@ internal void DEBUGDrawImage(v2 Position, bmp_file *Image) {
   }
 }
 
+void DrawPlayer(player *Player) {
+  v2 Position;
+  Position.x = Player->Position.x - Player->Width / 2;
+  Position.y = Player->Position.y - Player->Height / 2;
+  DEBUGDrawImage(Position, Player->Sprite);
+}
+
 internal bmp_file DEBUGReadBMPFile(char *Filename) {
   bmp_file Result = {};
   file_read_result FileReadResult =
@@ -274,10 +281,15 @@ void DrawTile(int Col, int Row) {
   }
 }
 
+bool32 AcceptableMove(player *lPlayer) {
+  return true;
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
   GameMemory = Memory;
+  player *Player = &gPlayer;
 
   // Load sprites
   if (!Sprites) {
@@ -295,9 +307,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Init player
-  if (!Player) {
-    Player = (player *)GameMemoryAlloc(sizeof(player));
+  if (!Player->Width) {
     Player->Sprite = Sprites->HeroRight;
+    Player->Width = Player->Sprite->Width;
+    Player->Height = Player->Sprite->Height;
   }
 
   // Init level
@@ -355,8 +368,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Value = LVL_PLAYER;
           Player->TileX = Column;
           Player->TileY = Row;
-          Player->X = (r32)(Player->TileX * kTileWidth);
-          Player->Y = (r32)(Player->TileY * kTileHeight);
+          Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
+          Player->Y = (r32)(Player->TileY * kTileHeight + kTileHeight / 2);
           PlayerSet = true;
         }
 
@@ -383,10 +396,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
+
+
+
+
+  // TODO: redraw
+  // Be able to get dimensions quick?
+  // AcceptableMove
+
+
+
+
+
   // Redraw tiles covered by player
   {
-    Player->TileX = (int)Player->X / kTileWidth;
-    Player->TileY = (int)Player->Y / kTileHeight;
     DrawTile(Player->TileX, Player->TileY);
 
     // Clear the other tile that might be covered
@@ -402,14 +425,29 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   {
     player_input *Input = &NewInput->Player2;
 
+    r32 Speed = 0.2f * NewInput->dtForFrame;
+
+    // Update based on movement keys
     if (Input->Right.EndedDown) {
-      Player->X += 3.0f;
+      r32 Old = Player->X;
+      Player->X += Speed;
+      if (!AcceptableMove(Player)) {
+        Player->X = Old;
+      }
       Player->Sprite = Sprites->HeroRight;
     }
     if (Input->Left.EndedDown) {
-      Player->X -= 3.0f;
+      r32 Old = Player->X;
+      Player->X -= Speed;
+      if (!AcceptableMove(Player)) {
+        Player->X = Old;
+      }
       Player->Sprite = Sprites->HeroLeft;
     }
+
+    // Update player tile
+    Player->TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
+    Player->TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
 
     // Don't go away from the level
     if (Player->X < 0) {
@@ -418,8 +456,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (Player->Y < 0) {
       Player->Y = 0;
     }
-    int MaxX = kTileWidth * (Level->Width - 1);
-    int MaxY = kTileHeight * (Level->Height - 1);
+    int MaxX = kTileWidth * Level->Width - Player->Width;
+    int MaxY = kTileHeight * Level->Height - Player->Height;
     if (Player->X > MaxX) {
       Player->X = (r32)MaxX;
     }
@@ -429,5 +467,5 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Draw
-  { DEBUGDrawImage(Player->Position, Player->Sprite); }
+  DrawPlayer(Player);
 }
