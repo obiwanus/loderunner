@@ -290,6 +290,7 @@ bool32 AcceptableMove(player *Player) {
   // Tells whether the player can be legitimately
   // placed in its position
 
+  // @copypaste
   int PlayerLeft = (int)Player->X - Player->Width / 2;
   int PlayerRight = (int)Player->X + Player->Width / 2;
   int PlayerTop = (int)Player->Y - Player->Height / 2;
@@ -324,6 +325,28 @@ bool32 AcceptableMove(player *Player) {
     }
   }
   return true;
+}
+
+bool32 PlayerTouches(player *Player, int TileType) {
+  // @copypaste
+  int const Shrink = 40;
+  int PlayerLeft = (int)Player->X - (Player->Width - Shrink) / 2;
+  int PlayerRight = (int)Player->X + (Player->Width - Shrink) / 2;
+  int PlayerTop = (int)Player->Y - Player->Height / 2;
+  int PlayerBottom = (int)Player->Y + Player->Height / 2;
+
+  int ColLeft = PlayerLeft / kTileWidth;
+  int ColRight = PlayerRight / kTileWidth;
+  int RowTop = PlayerTop / kTileHeight;
+  int RowBottom = PlayerBottom / kTileHeight;
+
+  for (int Row = RowTop; Row <= RowBottom; Row++) {
+    for (int Col = ColLeft; Col <= ColRight; Col++) {
+      if (Level->Contents[Row][Col] == TileType) return true;
+    }
+  }
+
+  return false;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -487,12 +510,38 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     r32 Speed = 0.2f * NewInput->dtForFrame;
 
+    bool32 Turbo = false;
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
       Speed *= 5;
+      Turbo = true;
     }
 #endif
+
+    bool32 OnLadder = PlayerTouches(Player, LVL_LADDER);
+
+    bool32 LadderBelow = false;
+    // {
+      int Col = Player->TileX;
+      int Row = Player->TileY + 1;
+      int PlayerBottom = (int)Player->Y + Player->Height / 2;
+        int TileTop = Row * kTileHeight;
+      if (Level->Contents[Row][Col] == LVL_LADDER) {
+
+        if (PlayerBottom + 3 >= TileTop)  // +3 to compensate float
+          LadderBelow = true;
+      }
+    // }
+
+
+
+    // TODO:
+    // - Fix the bug with the ladder (something's wrong with the)
+    //   ladder below check.
+    // - Don't allow to move while falling
+
+
 
     // Update based on movement keys
     if (Input->Right.EndedDown) {
@@ -511,17 +560,26 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Player->Sprite = Sprites->HeroLeft;
     }
-    if (Input->Up.EndedDown) {
+    if (Input->Up.EndedDown && (OnLadder || Turbo)) {
       r32 Old = Player->Y;
       Player->Y -= Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
       }
     }
-    if (Input->Down.EndedDown) {
+    if (Input->Down.EndedDown && (OnLadder || LadderBelow)) {
       r32 Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
+        Player->Y = Old;
+      }
+    }
+
+    // Gravity
+    {
+      r32 Old = Player->Y;
+      Player->Y += Speed;
+      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo) {
         Player->Y = Old;
       }
     }
