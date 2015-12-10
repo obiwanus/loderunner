@@ -264,6 +264,10 @@ internal bmp_file *LoadSprite(char *Filename) {
 }
 
 void DrawTile(int Col, int Row) {
+  if (Col < 0 || Row < 0 || Col >= Level->Width || Row >= Level->Height) {
+    // Don't draw outside level boundaries
+    return;
+  }
   v2 Position = {};
   Position.x = (r32)(Col * kTileWidth);
   Position.y = (r32)(Row * kTileHeight);
@@ -281,9 +285,7 @@ void DrawTile(int Col, int Row) {
   }
 }
 
-bool32 AcceptableMove(player *lPlayer) {
-  return true;
-}
+bool32 AcceptableMove(player *lPlayer) { return true; }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
@@ -396,28 +398,50 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
-
-
-
-
   // TODO: redraw
-  // Be able to get dimensions quick?
   // AcceptableMove
-
-
-
-
 
   // Redraw tiles covered by player
   {
     DrawTile(Player->TileX, Player->TileY);
+    int LeftBoundary = Player->TileX * kTileWidth;
+    int RightBoundary = (Player->TileX + 1) * kTileWidth;
+    int TopBoundary = Player->TileY * kTileHeight;
+    int BottomBoundary = (Player->TileY + 1) * kTileHeight;
 
     // Clear the other tile that might be covered
-    if ((int)Player->X % kTileWidth != 0) {
+    bool32 LeftTileCovered = (Player->X < LeftBoundary + Player->Width / 2);
+    bool32 RightTileCovered = (Player->X > RightBoundary - Player->Width / 2);
+    bool32 TopTileCovered = (Player->Y < TopBoundary + Player->Height / 2);
+    bool32 BottomTileCovered =
+        (Player->Y > BottomBoundary - Player->Height / 2);
+
+    Assert(!(LeftTileCovered && RightTileCovered));
+    Assert(!(TopTileCovered && BottomTileCovered));
+
+    if (LeftTileCovered) {
+      DrawTile(Player->TileX - 1, Player->TileY);
+    }
+    if (RightTileCovered) {
       DrawTile(Player->TileX + 1, Player->TileY);
     }
-    if ((int)Player->Y % kTileHeight != 0) {
+    if (TopTileCovered) {
+      DrawTile(Player->TileX, Player->TileY - 1);
+    }
+    if (BottomTileCovered) {
       DrawTile(Player->TileX, Player->TileY + 1);
+    }
+    if (LeftTileCovered && TopTileCovered) {
+      DrawTile(Player->TileX - 1, Player->TileY - 1);
+    }
+    if (LeftTileCovered && BottomTileCovered) {
+      DrawTile(Player->TileX - 1, Player->TileY + 1);
+    }
+    if (RightTileCovered && TopTileCovered) {
+      DrawTile(Player->TileX + 1, Player->TileY - 1);
+    }
+    if (RightTileCovered && BottomTileCovered) {
+      DrawTile(Player->TileX + 1, Player->TileY + 1);
     }
   }
 
@@ -443,6 +467,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Player->X = Old;
       }
       Player->Sprite = Sprites->HeroLeft;
+    }
+    if (Input->Up.EndedDown) {
+      r32 Old = Player->Y;
+      Player->Y -= Speed;
+      if (!AcceptableMove(Player)) {
+        Player->Y = Old;
+      }
+    }
+    if (Input->Down.EndedDown) {
+      r32 Old = Player->Y;
+      Player->Y += Speed;
+      if (!AcceptableMove(Player)) {
+        Player->Y = Old;
+      }
     }
 
     // Update player tile
