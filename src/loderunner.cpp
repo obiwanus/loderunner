@@ -280,12 +280,45 @@ void DrawTile(int Col, int Row) {
     DEBUGDrawImage(Position, Sprites->Rope);
   } else if (Value == LVL_TREASURE) {
     DEBUGDrawImage(Position, Sprites->Treasure);
-  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY) {
+  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY ||
+             Value == LVL_WIN_LADDER) {
     DEBUGDrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
 }
 
-bool32 AcceptableMove(player *lPlayer) { return true; }
+bool32 AcceptableMove(player *Player) {
+  // Tells whether the player can be legitimately
+  // placed in its position
+
+  int TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
+  int TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
+  int StartCol = (TileX <= 0) ? 0 : TileX - 1;
+  int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
+  int StartRow = (TileY <= 0) ? 0 : TileY - 1;
+  int EndRow = (TileY >= Level->Height - 1) ? TileY : TileY + 1;
+
+  int PlayerLeft = (int)Player->X - Player->Width / 2;
+  int PlayerRight = (int)Player->X + Player->Width / 2;
+  int PlayerTop = (int)Player->Y - Player->Height / 2;
+  int PlayerBottom = (int)Player->Y + Player->Height / 2;
+
+  for (int Row = StartRow; Row <= EndRow; Row++) {
+    for (int Col = StartCol; Col <= EndCol; Col++) {
+      int Tile = Level->Contents[Row][Col];
+      if (Tile != LVL_BRICK && Tile != LVL_BRICK_HARD) continue;
+
+      // Collision check
+      int TileLeft = Col * kTileWidth;
+      int TileRight = (Col + 1) * kTileWidth;
+      int TileTop = Row * kTileHeight;
+      int TileBottom = (Row + 1) * kTileHeight;
+      if (PlayerRight > TileLeft && PlayerLeft < TileRight &&
+          PlayerBottom > TileTop && PlayerTop < TileBottom)
+        return false;
+    }
+  }
+  return true;
+}
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
@@ -398,9 +431,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
-  // TODO: redraw
-  // AcceptableMove
-
   // Redraw tiles covered by player
   {
     DrawTile(Player->TileX, Player->TileY);
@@ -450,6 +480,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     player_input *Input = &NewInput->Player2;
 
     r32 Speed = 0.2f * NewInput->dtForFrame;
+
+#ifdef BUILD_INTERNAL
+    // Turbo
+    if (Input->Turbo.EndedDown) {
+      Speed *= 5;
+    }
+#endif
 
     // Update based on movement keys
     if (Input->Right.EndedDown) {

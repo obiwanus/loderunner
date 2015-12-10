@@ -62,13 +62,14 @@ struct game_button_state {
 
 struct player_input {
   union {
-    game_button_state Buttons[4];
+    game_button_state Buttons[5];
 
     struct {
       game_button_state Up;
       game_button_state Down;
       game_button_state Left;
       game_button_state Right;
+      game_button_state Turbo;
     };
   };
 };
@@ -111,6 +112,7 @@ struct level {
 enum {
   LVL_BLANK,
   LVL_BRICK,
+  LVL_BRICK_HARD,
   LVL_LADDER,
   LVL_WIN_LADDER,
   LVL_ROPE,
