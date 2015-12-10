@@ -290,17 +290,23 @@ bool32 AcceptableMove(player *Player) {
   // Tells whether the player can be legitimately
   // placed in its position
 
+  int PlayerLeft = (int)Player->X - Player->Width / 2;
+  int PlayerRight = (int)Player->X + Player->Width / 2;
+  int PlayerTop = (int)Player->Y - Player->Height / 2;
+  int PlayerBottom = (int)Player->Y + Player->Height / 2;
+
+  // Don't go away from the level
+  if (PlayerLeft < 0 || PlayerTop < 0 ||
+      PlayerRight > Level->Width * kTileWidth ||
+      PlayerBottom > Level->Height * kTileHeight)
+    return false;
+
   int TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
   int TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
   int StartCol = (TileX <= 0) ? 0 : TileX - 1;
   int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
   int StartRow = (TileY <= 0) ? 0 : TileY - 1;
   int EndRow = (TileY >= Level->Height - 1) ? TileY : TileY + 1;
-
-  int PlayerLeft = (int)Player->X - Player->Width / 2;
-  int PlayerRight = (int)Player->X + Player->Width / 2;
-  int PlayerTop = (int)Player->Y - Player->Height / 2;
-  int PlayerBottom = (int)Player->Y + Player->Height / 2;
 
   for (int Row = StartRow; Row <= EndRow; Row++) {
     for (int Col = StartCol; Col <= EndCol; Col++) {
@@ -523,22 +529,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Update player tile
     Player->TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
     Player->TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
-
-    // Don't go away from the level
-    if (Player->X < 0) {
-      Player->X = 0;
-    }
-    if (Player->Y < 0) {
-      Player->Y = 0;
-    }
-    int MaxX = kTileWidth * Level->Width - Player->Width;
-    int MaxY = kTileHeight * Level->Height - Player->Height;
-    if (Player->X > MaxX) {
-      Player->X = (r32)MaxX;
-    }
-    if (Player->Y > MaxY) {
-      Player->Y = (r32)MaxY;
-    }
   }
 
   // Draw
