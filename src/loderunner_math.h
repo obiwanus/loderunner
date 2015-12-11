@@ -86,6 +86,13 @@ inline r32 Abs(r32 Value) {
     return -Value;
 }
 
+inline int Abs(int Value) {
+  if (Value >= 0)
+    return Value;
+  else
+    return -Value;
+}
+
 inline r32 V2Length(v2 Vector) {
   r32 Result = SquareRoot(Square(Vector.x) + Square(Vector.y));
   return Result;

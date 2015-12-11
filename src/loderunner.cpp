@@ -333,6 +333,7 @@ bool32 AcceptableMove(player *Player) {
   return true;
 }
 
+// @delete?
 bool32 PlayerTouches(player *Player, int TileType) {
   // @copypaste
   int const Shrink = 40;
@@ -525,7 +526,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 #endif
 
-    bool32 OnLadder = PlayerTouches(Player, LVL_LADDER);
+    bool32 OnLadder = CheckTile(Player->TileY, Player->TileX) == LVL_LADDER;
 
     bool32 LadderBelow = false;
     {
@@ -537,6 +538,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         if (PlayerBottom + 3 >= TileTop)  // +3 to compensate float
           LadderBelow = true;
       }
+    }
+
+    bool32 CanClimb = false;
+    if (OnLadder || LadderBelow) {
+      int LadderCenter = Player->TileX * kTileWidth + kTileWidth / 2;
+      int PlayerX = (int)Player->X;
+      CanClimb = Abs(PlayerX - LadderCenter) < (Player->Width / 3);
     }
 
     bool32 OnRope = false;
@@ -582,19 +590,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Player->Sprite = Sprites->HeroLeft;
     }
-    if (Input->Up.EndedDown && (OnLadder || Turbo)) {
+    if (Input->Up.EndedDown && (CanClimb || Turbo)) {
       r32 Old = Player->Y;
       Player->Y -= Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
       }
     }
-    if (Input->Down.EndedDown && (OnLadder || LadderBelow || OnRope || Turbo)) {
+    if (Input->Down.EndedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
       r32 Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
       }
+    }
+
+    // Adjust player on ladder
+    if (CanClimb && (Input->Up.EndedDown || Input->Down.EndedDown)) {
+      Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
     }
 
     // Update player tile
