@@ -240,6 +240,8 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player2->Left, IsDown);
           } else if (VKCode == VK_RIGHT) {
             Win32ProcessKeyboardMessage(&Player2->Right, IsDown);
+          } else if (VKCode == 'X') {
+            Win32ProcessKeyboardMessage(&Player2->Turbo, IsDown);
           }
         }
 

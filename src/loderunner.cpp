@@ -261,6 +261,10 @@ internal bmp_file *LoadSprite(char const *Filename) {
 }
 
 void DrawTile(int Col, int Row) {
+  if (Col < 0 || Row < 0 || Col >= Level->Width || Row >= Level->Height) {
+    // Don't draw outside level boundaries
+    return;
+  }
   v2 Position = {};
   Position.x = (r32)(Col * kTileWidth);
   Position.y = (r32)(Row * kTileHeight);
@@ -273,13 +277,73 @@ void DrawTile(int Col, int Row) {
     DEBUGDrawImage(Position, Sprites->Rope);
   } else if (Value == LVL_TREASURE) {
     DEBUGDrawImage(Position, Sprites->Treasure);
-  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY) {
+  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY ||
+             Value == LVL_WIN_LADDER) {
     DEBUGDrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
 }
 
-bool32 AcceptableMove(player *lPlayer) {
+bool32 AcceptableMove(player *Player) {
+  // Tells whether the player can be legitimately
+  // placed in its position
+
+  // @copypaste
+  int PlayerLeft = (int)Player->X - Player->Width / 2;
+  int PlayerRight = (int)Player->X + Player->Width / 2;
+  int PlayerTop = (int)Player->Y - Player->Height / 2;
+  int PlayerBottom = (int)Player->Y + Player->Height / 2;
+
+  // Don't go away from the level
+  if (PlayerLeft < 0 || PlayerTop < 0 ||
+      PlayerRight > Level->Width * kTileWidth ||
+      PlayerBottom > Level->Height * kTileHeight)
+    return false;
+
+  int TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
+  int TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
+  int StartCol = (TileX <= 0) ? 0 : TileX - 1;
+  int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
+  int StartRow = (TileY <= 0) ? 0 : TileY - 1;
+  int EndRow = (TileY >= Level->Height - 1) ? TileY : TileY + 1;
+
+  for (int Row = StartRow; Row <= EndRow; Row++) {
+    for (int Col = StartCol; Col <= EndCol; Col++) {
+      int Tile = Level->Contents[Row][Col];
+      if (Tile != LVL_BRICK && Tile != LVL_BRICK_HARD) continue;
+
+      // Collision check
+      int TileLeft = Col * kTileWidth;
+      int TileRight = (Col + 1) * kTileWidth;
+      int TileTop = Row * kTileHeight;
+      int TileBottom = (Row + 1) * kTileHeight;
+      if (PlayerRight > TileLeft && PlayerLeft < TileRight &&
+          PlayerBottom > TileTop && PlayerTop < TileBottom)
+        return false;
+    }
+  }
   return true;
+}
+
+bool32 PlayerTouches(player *Player, int TileType) {
+  // @copypaste
+  int const Shrink = 40;
+  int PlayerLeft = (int)Player->X - (Player->Width - Shrink) / 2;
+  int PlayerRight = (int)Player->X + (Player->Width - Shrink) / 2;
+  int PlayerTop = (int)Player->Y - Player->Height / 2;
+  int PlayerBottom = (int)Player->Y + Player->Height / 2;
+
+  int ColLeft = PlayerLeft / kTileWidth;
+  int ColRight = PlayerRight / kTileWidth;
+  int RowTop = PlayerTop / kTileHeight;
+  int RowBottom = PlayerBottom / kTileHeight;
+
+  for (int Row = RowTop; Row <= RowBottom; Row++) {
+    for (int Col = ColLeft; Col <= ColRight; Col++) {
+      if (Level->Contents[Row][Col] == TileType) return true;
+    }
+  }
+
+  return false;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -393,28 +457,47 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
-
-
-
-
-  // TODO: redraw
-  // Be able to get dimensions quick?
-  // AcceptableMove
-
-
-
-
-
   // Redraw tiles covered by player
   {
     DrawTile(Player->TileX, Player->TileY);
+    int LeftBoundary = Player->TileX * kTileWidth;
+    int RightBoundary = (Player->TileX + 1) * kTileWidth;
+    int TopBoundary = Player->TileY * kTileHeight;
+    int BottomBoundary = (Player->TileY + 1) * kTileHeight;
 
     // Clear the other tile that might be covered
-    if ((int)Player->X % kTileWidth != 0) {
+    bool32 LeftTileCovered = (Player->X < LeftBoundary + Player->Width / 2);
+    bool32 RightTileCovered = (Player->X > RightBoundary - Player->Width / 2);
+    bool32 TopTileCovered = (Player->Y < TopBoundary + Player->Height / 2);
+    bool32 BottomTileCovered =
+        (Player->Y > BottomBoundary - Player->Height / 2);
+
+    Assert(!(LeftTileCovered && RightTileCovered));
+    Assert(!(TopTileCovered && BottomTileCovered));
+
+    if (LeftTileCovered) {
+      DrawTile(Player->TileX - 1, Player->TileY);
+    }
+    if (RightTileCovered) {
       DrawTile(Player->TileX + 1, Player->TileY);
     }
-    if ((int)Player->Y % kTileHeight != 0) {
+    if (TopTileCovered) {
+      DrawTile(Player->TileX, Player->TileY - 1);
+    }
+    if (BottomTileCovered) {
       DrawTile(Player->TileX, Player->TileY + 1);
+    }
+    if (LeftTileCovered && TopTileCovered) {
+      DrawTile(Player->TileX - 1, Player->TileY - 1);
+    }
+    if (LeftTileCovered && BottomTileCovered) {
+      DrawTile(Player->TileX - 1, Player->TileY + 1);
+    }
+    if (RightTileCovered && TopTileCovered) {
+      DrawTile(Player->TileX + 1, Player->TileY - 1);
+    }
+    if (RightTileCovered && BottomTileCovered) {
+      DrawTile(Player->TileX + 1, Player->TileY + 1);
     }
   }
 
@@ -423,6 +506,39 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     player_input *Input = &NewInput->Player2;
 
     r32 Speed = 0.2f * NewInput->dtForFrame;
+
+    bool32 Turbo = false;
+#ifdef BUILD_INTERNAL
+    // Turbo
+    if (Input->Turbo.EndedDown) {
+      Speed *= 5;
+      Turbo = true;
+    }
+#endif
+
+    bool32 OnLadder = PlayerTouches(Player, LVL_LADDER);
+
+    bool32 LadderBelow = false;
+    // {
+      int Col = Player->TileX;
+      int Row = Player->TileY + 1;
+      int PlayerBottom = (int)Player->Y + Player->Height / 2;
+        int TileTop = Row * kTileHeight;
+      if (Level->Contents[Row][Col] == LVL_LADDER) {
+
+        if (PlayerBottom + 3 >= TileTop)  // +3 to compensate float
+          LadderBelow = true;
+      }
+    // }
+
+
+
+    // TODO:
+    // - Fix the bug with the ladder (something's wrong with the)
+    //   ladder below check.
+    // - Don't allow to move while falling
+
+
 
     // Update based on movement keys
     if (Input->Right.EndedDown) {
@@ -441,26 +557,33 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Player->Sprite = Sprites->HeroLeft;
     }
+    if (Input->Up.EndedDown && (OnLadder || Turbo)) {
+      r32 Old = Player->Y;
+      Player->Y -= Speed;
+      if (!AcceptableMove(Player)) {
+        Player->Y = Old;
+      }
+    }
+    if (Input->Down.EndedDown && (OnLadder || LadderBelow)) {
+      r32 Old = Player->Y;
+      Player->Y += Speed;
+      if (!AcceptableMove(Player)) {
+        Player->Y = Old;
+      }
+    }
+
+    // Gravity
+    {
+      r32 Old = Player->Y;
+      Player->Y += Speed;
+      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo) {
+        Player->Y = Old;
+      }
+    }
 
     // Update player tile
     Player->TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
     Player->TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
-
-    // Don't go away from the level
-    if (Player->X < 0) {
-      Player->X = 0;
-    }
-    if (Player->Y < 0) {
-      Player->Y = 0;
-    }
-    int MaxX = kTileWidth * Level->Width - Player->Width;
-    int MaxY = kTileHeight * Level->Height - Player->Height;
-    if (Player->X > MaxX) {
-      Player->X = (r32)MaxX;
-    }
-    if (Player->Y > MaxY) {
-      Player->Y = (r32)MaxY;
-    }
   }
 
   // Draw
