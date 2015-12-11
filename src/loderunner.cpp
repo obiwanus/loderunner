@@ -260,8 +260,6 @@ internal bmp_file *LoadSprite(char const *Filename) {
   return Result;
 }
 
-
-
 bool32 CheckTile(int Row, int Col) {
   if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
     return -1;  // Invalid tile
@@ -296,7 +294,6 @@ bool32 AcceptableMove(player *Player) {
   // Tells whether the player can be legitimately
   // placed in its position
 
-  // @copypaste
   int PlayerLeft = (int)Player->X - Player->Width / 2;
   int PlayerRight = (int)Player->X + Player->Width / 2;
   int PlayerTop = (int)Player->Y - Player->Height / 2;
@@ -331,29 +328,6 @@ bool32 AcceptableMove(player *Player) {
     }
   }
   return true;
-}
-
-// @delete?
-bool32 PlayerTouches(player *Player, int TileType) {
-  // @copypaste
-  int const Shrink = 40;
-  int PlayerLeft = (int)Player->X - (Player->Width - Shrink) / 2;
-  int PlayerRight = (int)Player->X + (Player->Width - Shrink) / 2;
-  int PlayerTop = (int)Player->Y - Player->Height / 2;
-  int PlayerBottom = (int)Player->Y + Player->Height / 2;
-
-  int ColLeft = PlayerLeft / kTileWidth;
-  int ColRight = PlayerRight / kTileWidth;
-  int RowTop = PlayerTop / kTileHeight;
-  int RowBottom = PlayerBottom / kTileHeight;
-
-  for (int Row = RowTop; Row <= RowBottom; Row++) {
-    for (int Col = ColLeft; Col <= ColRight; Col++) {
-      if (CheckTile(Row, Col) == TileType) return true;
-    }
-  }
-
-  return false;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -619,5 +593,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // DEBUGDrawRectangle(
   //     {r32(Player->TileX * kTileWidth), r32(Player->TileY * kTileHeight)},
   //     kTileWidth, kTileHeight, 0x00333333);
+
+
+
+  // TODO:
+  // - Understand how to draw sprites
+  // - Draw sprites in the right order with the right frequency
+
+
+
   DrawPlayer(Player);
 }
