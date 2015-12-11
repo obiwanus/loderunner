@@ -260,6 +260,15 @@ internal bmp_file *LoadSprite(char const *Filename) {
   return Result;
 }
 
+
+
+bool32 CheckTile(int Row, int Col) {
+  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+    return -1;  // Invalid tile
+  }
+  return Level->Contents[Row][Col];
+}
+
 void DrawTile(int Col, int Row) {
   if (Col < 0 || Row < 0 || Col >= Level->Width || Row >= Level->Height) {
     // Don't draw outside level boundaries
@@ -268,7 +277,7 @@ void DrawTile(int Col, int Row) {
   v2 Position = {};
   Position.x = (r32)(Col * kTileWidth);
   Position.y = (r32)(Row * kTileHeight);
-  int Value = Level->Contents[Row][Col];
+  int Value = CheckTile(Row, Col);
   if (Value == LVL_BRICK) {
     DEBUGDrawImage(Position, Sprites->Brick);
   } else if (Value == LVL_LADDER) {
@@ -308,7 +317,7 @@ bool32 AcceptableMove(player *Player) {
 
   for (int Row = StartRow; Row <= EndRow; Row++) {
     for (int Col = StartCol; Col <= EndCol; Col++) {
-      int Tile = Level->Contents[Row][Col];
+      int Tile = CheckTile(Row, Col);
       if (Tile != LVL_BRICK && Tile != LVL_BRICK_HARD) continue;
 
       // Collision check
@@ -339,7 +348,7 @@ bool32 PlayerTouches(player *Player, int TileType) {
 
   for (int Row = RowTop; Row <= RowBottom; Row++) {
     for (int Col = ColLeft; Col <= ColRight; Col++) {
-      if (Level->Contents[Row][Col] == TileType) return true;
+      if (CheckTile(Row, Col) == TileType) return true;
     }
   }
 
@@ -523,11 +532,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       int Col = Player->TileX;
       int Row = Player->TileY + 1;
       int PlayerBottom = (int)Player->Y + Player->Height / 2;
-        int TileTop = Row * kTileHeight;
-      if (Level->Contents[Row][Col] == LVL_LADDER) {
-
+      int TileTop = Row * kTileHeight;
+      if (CheckTile(Row, Col) == LVL_LADDER) {
         if (PlayerBottom + 3 >= TileTop)  // +3 to compensate float
           LadderBelow = true;
+      }
+    }
+
+    bool32 OnRope = false;
+    if (CheckTile(Player->TileY, Player->TileX) == LVL_ROPE) {
+      int RopeY = Player->TileY * kTileHeight;
+      int PlayerTop = (int)Player->Y - Player->Height / 2;
+      OnRope = (PlayerTop == RopeY) ||
+               (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
+      // Adjust player on a rope
+      if (OnRope) {
+        Player->Y = (r32)(RopeY + Player->Height / 2);
       }
     }
 
@@ -536,7 +556,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     {
       r32 Old = Player->Y;
       Player->Y += Speed;
-      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo) {
+      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo ||
+          OnRope) {
         Player->Y = Old;
         IsFalling = false;
       } else {
@@ -568,7 +589,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Player->Y = Old;
       }
     }
-    if (Input->Down.EndedDown && (OnLadder || LadderBelow || Turbo)) {
+    if (Input->Down.EndedDown && (OnLadder || LadderBelow || OnRope || Turbo)) {
       r32 Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
