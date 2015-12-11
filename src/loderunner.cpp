@@ -519,7 +519,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 OnLadder = PlayerTouches(Player, LVL_LADDER);
 
     bool32 LadderBelow = false;
-    // {
+    {
       int Col = Player->TileX;
       int Row = Player->TileY + 1;
       int PlayerBottom = (int)Player->Y + Player->Height / 2;
@@ -529,19 +529,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         if (PlayerBottom + 3 >= TileTop)  // +3 to compensate float
           LadderBelow = true;
       }
-    // }
+    }
 
-
-
-    // TODO:
-    // - Fix the bug with the ladder (something's wrong with the)
-    //   ladder below check.
-    // - Don't allow to move while falling
-
-
+    // Gravity
+    bool32 IsFalling = false;
+    {
+      r32 Old = Player->Y;
+      Player->Y += Speed;
+      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo) {
+        Player->Y = Old;
+        IsFalling = false;
+      } else {
+        IsFalling = true;
+      }
+    }
 
     // Update based on movement keys
-    if (Input->Right.EndedDown) {
+    if (Input->Right.EndedDown && (!IsFalling || Turbo)) {
       r32 Old = Player->X;
       Player->X += Speed;
       if (!AcceptableMove(Player)) {
@@ -549,7 +553,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Player->Sprite = Sprites->HeroRight;
     }
-    if (Input->Left.EndedDown) {
+    if (Input->Left.EndedDown && (!IsFalling || Turbo)) {
       r32 Old = Player->X;
       Player->X -= Speed;
       if (!AcceptableMove(Player)) {
@@ -564,7 +568,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Player->Y = Old;
       }
     }
-    if (Input->Down.EndedDown && (OnLadder || LadderBelow)) {
+    if (Input->Down.EndedDown && (OnLadder || LadderBelow || Turbo)) {
       r32 Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
@@ -572,20 +576,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
-    // Gravity
-    {
-      r32 Old = Player->Y;
-      Player->Y += Speed;
-      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo) {
-        Player->Y = Old;
-      }
-    }
-
     // Update player tile
-    Player->TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
-    Player->TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
+    Player->TileX = (int)Player->X / kTileWidth;
+    Player->TileY = (int)Player->Y / kTileHeight;
   }
 
   // Draw
+  // DEBUGDrawRectangle(
+  //     {r32(Player->TileX * kTileWidth), r32(Player->TileY * kTileHeight)},
+  //     kTileWidth, kTileHeight, 0x00333333);
   DrawPlayer(Player);
 }
