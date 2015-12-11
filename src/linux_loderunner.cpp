@@ -3,6 +3,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 // #include <X11/Xos.h>
+#include <dlfcn.h>
 #include <stdio.h>
 
 #if BUILD_SLOW
@@ -63,9 +64,15 @@ int main(int argc, char const *argv[]) {
   }
 
   screen = DefaultScreen(display);
+
+  u32 border_color = WhitePixel(display, screen);
+  u32 bg_color = BlackPixel(display, screen);
+
+  printf("white: %u\n", border_color);
+  printf("black: %u\n", bg_color);
+
   window = XCreateSimpleWindow(display, RootWindow(display, screen), 300, 300,
-                               500, 500, 1, BlackPixel(display, screen),
-                               WhitePixel(display, screen));
+                               500, 500, 1, border_color, bg_color);
 
   XSetStandardProperties(display, window, "My Window", "Hi!", None, NULL, 0,
                          NULL);
@@ -79,29 +86,39 @@ int main(int argc, char const *argv[]) {
   GlobalRunning = true;
 
   while (GlobalRunning) {
-    XNextEvent(display, &event);
-    if (event.type == Expose) {
-      XFillRectangle(display, window, DefaultGC(display, screen), 20, 20, 10,
-                     10);
-    }
-    if (event.type == KeyPress &&
-        XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
-      char symbol = buf[0];
-      if (symbol == 'q') {
-        GlobalRunning = false;
+
+    // Process events
+    {
+      XNextEvent(display, &event);
+      if (event.type == Expose) {
+        XFillRectangle(display, window, DefaultGC(display, screen), 20, 20, 10,
+                       10);
       }
-    }
-    if (event.type == ButtonPress) {
-      printf("Click at (%i, %i)\n", event.xbutton.x, event.xbutton.y);
-    }
-    if (event.type == ClientMessage) {
-      if (event.xclient.data.l[0] == wmDeleteMessage) {
-        GlobalRunning = false;
+      if (event.type == KeyPress &&
+          XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
+        char symbol = buf[0];
+        if (symbol == 'q') {
+          GlobalRunning = false;
+        }
       }
+      if (event.type == ButtonPress) {
+        printf("Click at (%i, %i)\n", event.xbutton.x, event.xbutton.y);
+        XMoveWindow(display, window, event.xbutton.x, event.xbutton.y);
+      }
+      if (event.type == ClientMessage) {
+        if (event.xclient.data.l[0] == wmDeleteMessage) {
+          GlobalRunning = false;
+        }
+      }
+      // TODO: collect input
     }
+
+
+
   }
 
   XCloseDisplay(display);
 
   return 0;
 }
+

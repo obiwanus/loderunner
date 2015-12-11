@@ -1,8 +1,5 @@
 #include "loderunner.h"
 
-// TODO: delete
-#include <windows.h>
-
 // These are saved as global vars on the first call of GameUpdateAndRender
 global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
@@ -228,7 +225,7 @@ void DrawPlayer(player *Player) {
   DEBUGDrawImage(Position, Player->Sprite);
 }
 
-internal bmp_file DEBUGReadBMPFile(char *Filename) {
+internal bmp_file DEBUGReadBMPFile(char const *Filename) {
   bmp_file Result = {};
   file_read_result FileReadResult =
       GameMemory->DEBUGPlatformReadEntireFile(Filename);
@@ -256,7 +253,7 @@ internal bmp_file DEBUGReadBMPFile(char *Filename) {
   return Result;
 }
 
-internal bmp_file *LoadSprite(char *Filename) {
+internal bmp_file *LoadSprite(char const *Filename) {
   bmp_file *Result = (bmp_file *)GameMemoryAlloc(sizeof(bmp_file));
   *Result = DEBUGReadBMPFile(Filename);
 
@@ -318,7 +315,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
     // Load level
     {
-      char *Filename = "levels/level_1.txt";
+      char const *Filename = "levels/level_1.txt";
       file_read_result FileReadResult =
           GameMemory->DEBUGPlatformReadEntireFile(Filename);
 

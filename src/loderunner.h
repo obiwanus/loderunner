@@ -137,7 +137,7 @@ struct file_read_result {
 // Platform functions
 
 #define DEBUG_PLATFORM_READ_ENTIRE_FILE(name) \
-  file_read_result name(char *Filename)
+  file_read_result name(char const *Filename)
 typedef DEBUG_PLATFORM_READ_ENTIRE_FILE(debug_platform_read_entire_file);
 
 #define DEBUG_PLATFORM_WRITE_ENTIRE_FILE(name) \
