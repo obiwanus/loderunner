@@ -55,6 +55,30 @@ struct bmp_info_header {
 
 #pragma pack(pop)
 
+struct sprite {
+  bmp_file *Image;
+  int XOffset;
+  int YOffset;
+  int Width;
+  int Height;
+};
+
+struct sprites {
+  bmp_file *Brick;
+  bmp_file *BrickHard;
+  bmp_file *Ladder;
+  bmp_file *Rope;
+  bmp_file *Treasure;
+  bmp_file *Sprites;  // crazy
+  sprite HeroLeft;
+  sprite HeroRight;
+};
+
+struct file_read_result {
+  void *Memory;
+  u64 MemorySize;
+};
+
 struct game_button_state {
   int HalfTransitionCount;
   bool32 EndedDown;
@@ -97,7 +121,7 @@ struct player {
   int TileY;
   int Width;
   int Height;
-  bmp_file *Sprite;
+  sprite *Sprite;
 };
 
 #define MAX_LEVEL_HEIGHT 100
@@ -119,21 +143,6 @@ enum {
   LVL_TREASURE,
   LVL_ENEMY,
   LVL_PLAYER,
-};
-
-struct sprites {
-  bmp_file *Brick;
-  bmp_file *BrickHard;
-  bmp_file *Ladder;
-  bmp_file *Rope;
-  bmp_file *Treasure;
-  bmp_file *HeroLeft;
-  bmp_file *HeroRight;
-};
-
-struct file_read_result {
-  void *Memory;
-  u64 MemorySize;
 };
 
 // Platform functions

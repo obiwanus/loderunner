@@ -10,6 +10,8 @@ global sprites *Sprites;
 
 global int kTileWidth = 32;
 global int kTileHeight = 32;
+global int kHumanWidth = 24;
+global int kHumanHeight = 32;
 
 inline int TruncateReal32(r32 Value) {
   int Result = (int)Value;
@@ -218,11 +220,73 @@ internal void DEBUGDrawImage(v2 Position, bmp_file *Image) {
   }
 }
 
-void DrawPlayer(player *Player) {
+internal void DrawSprite(v2 Position, sprite *Sprite) {
+  // @copypaste - possibly can me merged with DEBUGDrawImage
+
+  int Width = Sprite->Width;
+  int Height = Sprite->Height;
+  int X = (int)Position.x;
+  int Y = (int)Position.y;
+
+  int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
+  int SrcPitch = Sprite->Image->Width;
+  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
+            X * GameBackBuffer->BytesPerPixel;
+  u32 *SrcRow = (u32 *)Sprite->Image->Bitmap +
+                SrcPitch * (Sprite->YOffset - 1) +
+                Sprite->XOffset;  // Top left corner of the sprite
+  SrcRow += SrcPitch * Height - Width;  // Bottom left corner (bmp!)
+
+  for (int pY = Y; pY < Y + Height; pY++) {
+    int *Pixel = (int *)Row;
+    int *SrcPixel = (int *)SrcRow;
+
+    for (int pX = X; pX < X + Width; pX++) {
+      // TODO: bmp may not be masked
+      u8 Red = UnmaskColor(*SrcPixel, Sprite->Image->RedMask);
+      u8 Green = UnmaskColor(*SrcPixel, Sprite->Image->GreenMask);
+      u8 Blue = UnmaskColor(*SrcPixel, Sprite->Image->BlueMask);
+      u8 Alpha = UnmaskColor(*SrcPixel, Sprite->Image->AlphaMask);
+
+      u32 ResultingColor = Red << 16 | Green << 8 | Blue;
+
+      if (Alpha > 0 && Alpha < 0xFF) {
+        r32 ExistingRed = (r32)((*Pixel >> 16) & 0xFF);
+        r32 ExistingGreen = (r32)((*Pixel >> 8) & 0xFF);
+        r32 ExistingBlue = (r32)((*Pixel >> 0) & 0xFF);
+
+        r32 NewRed = (r32)((ResultingColor >> 16) & 0xFF);
+        r32 NewGreen = (r32)((ResultingColor >> 8) & 0xFF);
+        r32 NewBlue = (r32)((ResultingColor >> 0) & 0xFF);
+
+        // Blending
+        r32 t = (r32)Alpha / 255.0f;
+
+        NewRed = NewRed * t + ExistingRed * (1 - t);
+        NewGreen = NewGreen * t + ExistingGreen * (1 - t);
+        NewBlue = NewBlue * t + ExistingBlue * (1 - t);
+
+        *Pixel =
+            (((u8)NewRed << 16) | ((u8)NewGreen << 8) | ((u8)NewBlue << 0));
+      } else if (Alpha == 0xFF) {
+        *Pixel = ResultingColor;
+      } else {
+        // do nothing
+      }
+
+      Pixel++;
+      SrcPixel++;
+    }
+    Row += Pitch;
+    SrcRow -= SrcPitch;
+  }
+}
+
+internal void DrawPlayer(player *Player) {
   v2 Position;
   Position.x = Player->Position.x - Player->Width / 2;
   Position.y = Player->Position.y - Player->Height / 2;
-  DEBUGDrawImage(Position, Player->Sprite);
+  DrawSprite(Position, Player->Sprite);
 }
 
 internal bmp_file DEBUGReadBMPFile(char const *Filename) {
@@ -347,13 +411,25 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Sprites->Ladder = LoadSprite("img/ladder.bmp");
     Sprites->Rope = LoadSprite("img/rope.bmp");
     Sprites->Treasure = LoadSprite("img/treasure.bmp");
-    Sprites->HeroLeft = LoadSprite("img/hero-left.bmp");
-    Sprites->HeroRight = LoadSprite("img/hero-right.bmp");
+    Sprites->Sprites = LoadSprite("img/sprites.bmp");
+
+    // tmp
+    Sprites->HeroRight.Image = Sprites->Sprites;
+    Sprites->HeroRight.XOffset = 0;
+    Sprites->HeroRight.YOffset = 0;
+    Sprites->HeroRight.Width = kHumanWidth;
+    Sprites->HeroRight.Height = kHumanHeight;
+
+    Sprites->HeroLeft.Image = Sprites->Sprites;
+    Sprites->HeroLeft.XOffset = 72;
+    Sprites->HeroLeft.YOffset = 32;
+    Sprites->HeroLeft.Width = kHumanWidth;
+    Sprites->HeroLeft.Height = kHumanHeight;
   }
 
   // Init player
   if (!Player->Width) {
-    Player->Sprite = Sprites->HeroRight;
+    Player->Sprite = &Sprites->HeroRight;
     Player->Width = Player->Sprite->Width;
     Player->Height = Player->Sprite->Height;
   }
@@ -554,7 +630,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (!AcceptableMove(Player)) {
         Player->X = Old;
       }
-      Player->Sprite = Sprites->HeroRight;
+      Player->Sprite = &Sprites->HeroRight;
     }
     if (Input->Left.EndedDown && (!IsFalling || Turbo)) {
       r32 Old = Player->X;
@@ -562,7 +638,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (!AcceptableMove(Player)) {
         Player->X = Old;
       }
-      Player->Sprite = Sprites->HeroLeft;
+      Player->Sprite = &Sprites->HeroLeft;
     }
     if (Input->Up.EndedDown && (CanClimb || Turbo)) {
       r32 Old = Player->Y;
@@ -597,6 +673,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
 
   // TODO:
+  // - Fix the sprite drawing code
   // - Understand how to draw sprites
   // - Draw sprites in the right order with the right frequency
 
