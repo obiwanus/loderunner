@@ -230,12 +230,13 @@ internal void DrawSprite(v2 Position, sprite *Sprite) {
 
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
   int SrcPitch = Sprite->Image->Width;
+
   u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
             X * GameBackBuffer->BytesPerPixel;
-  u32 *SrcRow = (u32 *)Sprite->Image->Bitmap +
-                SrcPitch * (Sprite->YOffset - 1) +
-                Sprite->XOffset;  // Top left corner of the sprite
-  SrcRow += SrcPitch * Height - Width;  // Bottom left corner (bmp!)
+  u32 *BottomLeftCorner =
+      (u32 *)Sprite->Image->Bitmap +
+      Sprite->Image->Width * (Sprite->Image->Height - 1);
+  u32 *SrcRow = BottomLeftCorner - SrcPitch * Sprite->YOffset + Sprite->XOffset;
 
   for (int pY = Y; pY < Y + Height; pY++) {
     int *Pixel = (int *)Row;
@@ -673,7 +674,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
 
   // TODO:
-  // - Fix the sprite drawing code
   // - Understand how to draw sprites
   // - Draw sprites in the right order with the right frequency
 
