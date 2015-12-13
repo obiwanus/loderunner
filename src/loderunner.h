@@ -109,6 +109,18 @@ struct game_input {
   r32 dtForFrame;
 };
 
+struct frame {
+  int XOffset;
+  int YOffset;
+  int Lasting;
+};
+
+struct animation {
+  int FrameCount;
+  int Frame;  // Current frame
+  frame *Frames;
+};
+
 struct player {
   union {
     v2 Position;
@@ -122,6 +134,15 @@ struct player {
   int Width;
   int Height;
   sprite *Sprite;
+
+  // Animation
+  int AnimationCounter;
+  animation *Animation;
+  animation GoingLeft;
+  animation GoingRight;
+  animation Falling;
+  animation Climbing;
+  animation OnRope;
 };
 
 #define MAX_LEVEL_HEIGHT 100
