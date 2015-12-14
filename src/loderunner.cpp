@@ -502,17 +502,37 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Frames[0] = {0, 0, 3};
       Frames[1] = {24, 0, 1};
       Frames[2] = {48, 0, 1};
-      // Frames[3] = {72, 0};
       Animation->Frames = Frames;
 
       // Going left
       Animation = &Player->GoingLeft;
       Animation->FrameCount = 3;
       Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {48, 32, 3};
+      Frames[0] = {0, 32, 3};
       Frames[1] = {24, 32, 1};
-      Frames[2] = {0, 32, 1};
-      // Frames[3] = {0, 32};
+      Frames[2] = {48, 32, 1};
+      Animation->Frames = Frames;
+
+      // NOTE:
+      // - Enemies: 4, 4, 6, speed = 2
+      // - Player: 2, 2, 3, speed = 4
+
+      // On rope right
+      Animation = &Player->RopeRight;
+      Animation->FrameCount = 3;
+      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
+      Frames[0] = {0, 64, 2};
+      Frames[1] = {24, 64, 2};
+      Frames[2] = {48, 64, 3};
+      Animation->Frames = Frames;
+
+      // On rope right
+      Animation = &Player->RopeLeft;
+      Animation->FrameCount = 3;
+      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
+      Frames[0] = {0, 96, 2};
+      Frames[1] = {24, 96, 2};
+      Frames[2] = {48, 96, 3};
       Animation->Frames = Frames;
     }
   }
@@ -667,7 +687,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (!AcceptableMove(Player)) {
         Player->X = Old;
       } else {
-        Player->Animation = &Player->GoingRight;
+        if (!OnRope) {
+          Player->Animation = &Player->GoingRight;
+        } else {
+          Player->Animation = &Player->RopeRight;
+        }
         Animate = true;
       }
     }
@@ -677,7 +701,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (!AcceptableMove(Player)) {
         Player->X = Old;
       } else {
-        Player->Animation = &Player->GoingLeft;
+        if (!OnRope) {
+          Player->Animation = &Player->GoingLeft;
+        } else {
+          Player->Animation = &Player->RopeLeft;
+        }
         Animate = true;
       }
     }

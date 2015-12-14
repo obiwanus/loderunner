@@ -140,7 +140,8 @@ struct player {
   animation GoingLeft;
   animation GoingRight;
   animation Climbing;
-  animation OnRope;
+  animation RopeLeft;
+  animation RopeRight;
 };
 
 #define MAX_LEVEL_HEIGHT 100
