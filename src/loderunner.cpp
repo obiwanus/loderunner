@@ -534,6 +534,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Frames[1] = {24, 96, 2};
       Frames[2] = {48, 96, 3};
       Animation->Frames = Frames;
+
+      // On ladder
+      Animation = &Player->Climbing;
+      Animation->FrameCount = 2;
+      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
+      Frames[0] = {0, 128, 2};
+      Frames[1] = {24, 128, 2};
+      Animation->Frames = Frames;
     }
   }
 
@@ -715,6 +723,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
       } else {
+        Player->Animation = &Player->Climbing;
         Animate = true;
       }
     }
@@ -723,10 +732,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
-      } else {
+      } else if (LadderBelow || CanClimb) {
+        Player->Animation = &Player->Climbing;
         Animate = true;
       }
     }
+
+
+
+
+    // TODO:
+    // - Fix the top ladder bug
+    // - Don't try to climb down and stick if there's no ladder below
+    // - Crush bricks!
+
+
+
 
     if (IsFalling) {
       Player->Sprite = Sprites->Falling;
