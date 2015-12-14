@@ -455,6 +455,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   GameMemory = Memory;
   player *Player = &gPlayer;
   bool32 Animate = false;
+  bool32 Turbo = false;
 
   // Load sprites
   if (!Sprites) {
@@ -617,8 +618,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     player_input *Input = &NewInput->Player2;
 
     r32 Speed = 4.0f;
-
-    bool32 Turbo = false;
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
@@ -682,6 +681,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Player->X = Old;
       } else {
         Player->Animation = &Player->GoingRight;
+        Animate = true;
       }
     }
     if (Input->Left.EndedDown && (!IsFalling || Turbo)) {
@@ -691,6 +691,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Player->X = Old;
       } else {
         Player->Animation = &Player->GoingLeft;
+        Animate = true;
       }
     }
     if (Input->Up.EndedDown && (CanClimb || Turbo)) {
@@ -698,6 +699,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player->Y -= Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
+      } else {
+        Animate = true;
       }
     }
     if (Input->Down.EndedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
@@ -705,6 +708,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
+      } else {
+        Animate = true;
       }
     }
 
@@ -716,20 +721,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Update player tile
     Player->TileX = (int)Player->X / kTileWidth;
     Player->TileY = (int)Player->Y / kTileHeight;
-
-
-
-    // TODO:
-    // - Fix the animate flag: animate only if really moving
-    // - Add more animations
-
-
-
-    Animate = Input->Up.EndedDown || Input->Down.EndedDown ||
-              Input->Left.EndedDown || Input->Right.EndedDown;
   }
 
-  if (Animate) {
+  if (Animate && !Turbo) {
     animation *Animation = Player->Animation;
     frame *Frame = &Animation->Frames[Animation->Frame];
 
