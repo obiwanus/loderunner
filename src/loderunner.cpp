@@ -220,22 +220,22 @@ internal void DEBUGDrawImage(v2 Position, bmp_file *Image) {
   }
 }
 
-internal void DrawSprite(v2 Position, sprite *Sprite) {
+internal void DrawSprite(v2 Position, sprite Sprite) {
   // @copypaste - possibly can me merged with DEBUGDrawImage
 
-  int Width = Sprite->Width;
-  int Height = Sprite->Height;
+  int Width = Sprite.Width;
+  int Height = Sprite.Height;
   int X = (int)Position.x;
   int Y = (int)Position.y;
 
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
-  int SrcPitch = Sprite->Image->Width;
+  int SrcPitch = Sprite.Image->Width;
 
   u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
             X * GameBackBuffer->BytesPerPixel;
-  u32 *BottomLeftCorner = (u32 *)Sprite->Image->Bitmap +
-                          Sprite->Image->Width * (Sprite->Image->Height - 1);
-  u32 *SrcRow = BottomLeftCorner - SrcPitch * Sprite->YOffset + Sprite->XOffset;
+  u32 *BottomLeftCorner = (u32 *)Sprite.Image->Bitmap +
+                          Sprite.Image->Width * (Sprite.Image->Height - 1);
+  u32 *SrcRow = BottomLeftCorner - SrcPitch * Sprite.YOffset + Sprite.XOffset;
 
   for (int pY = Y; pY < Y + Height; pY++) {
     int *Pixel = (int *)Row;
@@ -243,10 +243,10 @@ internal void DrawSprite(v2 Position, sprite *Sprite) {
 
     for (int pX = X; pX < X + Width; pX++) {
       // TODO: bmp may not be masked
-      u8 Red = UnmaskColor(*SrcPixel, Sprite->Image->RedMask);
-      u8 Green = UnmaskColor(*SrcPixel, Sprite->Image->GreenMask);
-      u8 Blue = UnmaskColor(*SrcPixel, Sprite->Image->BlueMask);
-      u8 Alpha = UnmaskColor(*SrcPixel, Sprite->Image->AlphaMask);
+      u8 Red = UnmaskColor(*SrcPixel, Sprite.Image->RedMask);
+      u8 Green = UnmaskColor(*SrcPixel, Sprite.Image->GreenMask);
+      u8 Blue = UnmaskColor(*SrcPixel, Sprite.Image->BlueMask);
+      u8 Alpha = UnmaskColor(*SrcPixel, Sprite.Image->AlphaMask);
 
       u32 ResultingColor = Red << 16 | Green << 8 | Blue;
 
@@ -462,6 +462,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     kTileWidth = 32;
     kTileHeight = 32;
 
+    // @rewrite: put all environment in the sprites
+
     Sprites = (sprites *)GameMemoryAlloc(sizeof(sprites));
     Sprites->Brick = LoadSprite("img/brick.bmp");
     Sprites->BrickHard = LoadSprite("img/brick-hard.bmp");
@@ -470,39 +472,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Sprites->Treasure = LoadSprite("img/treasure.bmp");
     Sprites->Sprites = LoadSprite("img/sprites.bmp");
 
-    // tmp
-    Sprites->HeroRight.Image = Sprites->Sprites;
-    Sprites->HeroRight.XOffset = 0;
-    Sprites->HeroRight.YOffset = 0;
-    Sprites->HeroRight.Width = kHumanWidth;
-    Sprites->HeroRight.Height = kHumanHeight;
-
-    Sprites->HeroLeft.Image = Sprites->Sprites;
-    Sprites->HeroLeft.XOffset = 72;
-    Sprites->HeroLeft.YOffset = 32;
-    Sprites->HeroLeft.Width = kHumanWidth;
-    Sprites->HeroLeft.Height = kHumanHeight;
+    Sprites->Falling.Image = Sprites->Sprites;
+    Sprites->Falling.XOffset = 72;
+    Sprites->Falling.YOffset = 0;
+    Sprites->Falling.Width = kHumanWidth;
+    Sprites->Falling.Height = kHumanHeight;
   }
 
   // Init player
   if (!Player->Width) {
-    Player->Sprite = &Sprites->HeroRight;
-    Player->Width = Player->Sprite->Width;
-    Player->Height = Player->Sprite->Height;
-    Player->Animation = &Player->Falling;
+    Player->Sprite = Sprites->Falling;
+    Player->Width = Player->Sprite.Width;
+    Player->Height = Player->Sprite.Height;
+    Player->Animation = NULL;
 
     // Init animations
     {
       frame *Frames = NULL;
       animation *Animation = NULL;
-
-      // Falling
-      // @incomplete
-      Animation = &Player->Falling;
-      Animation->FrameCount = 1;
-      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {0, 0, 0};
-      Animation->Frames = Frames;
 
       // NOTE:
       // - Enemies: 6, 3, 3, speed = 2
@@ -522,9 +509,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Animation = &Player->GoingLeft;
       Animation->FrameCount = 3;
       Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {72, 32, 3};
-      Frames[1] = {48, 32, 1};
-      Frames[2] = {24, 32, 1};
+      Frames[0] = {48, 32, 3};
+      Frames[1] = {24, 32, 1};
+      Frames[2] = {0, 32, 1};
       // Frames[3] = {0, 32};
       Animation->Frames = Frames;
     }
@@ -713,6 +700,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
+    if (IsFalling) {
+      Player->Sprite = Sprites->Falling;
+      Animate = false;
+    }
+
     // Adjust player on ladder
     if (CanClimb && (Input->Up.EndedDown || Input->Down.EndedDown)) {
       Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
@@ -723,7 +715,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Player->TileY = (int)Player->Y / kTileHeight;
   }
 
-  if (Animate && !Turbo) {
+  if (Animate && !Turbo && Player->Animation != NULL) {
     animation *Animation = Player->Animation;
     frame *Frame = &Animation->Frames[Animation->Frame];
 
@@ -732,8 +724,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     if (Player->AnimationCounter == 0) {
-      Player->Sprite->XOffset = Frame->XOffset;
-      Player->Sprite->YOffset = Frame->YOffset;
+      Player->Sprite.XOffset = Frame->XOffset;
+      Player->Sprite.YOffset = Frame->YOffset;
 
       DrawPlayer(Player);
 
@@ -744,8 +736,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     Player->AnimationCounter += 1;
-  }
-  else {
+  } else {
     DrawPlayer(Player);
   }
 }

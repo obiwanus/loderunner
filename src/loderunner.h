@@ -70,8 +70,7 @@ struct sprites {
   bmp_file *Rope;
   bmp_file *Treasure;
   bmp_file *Sprites;  // crazy
-  sprite HeroLeft;
-  sprite HeroRight;
+  sprite Falling;
 };
 
 struct file_read_result {
@@ -133,14 +132,13 @@ struct player {
   int TileY;
   int Width;
   int Height;
-  sprite *Sprite;
+  sprite Sprite;
 
   // Animation
   int AnimationCounter;
   animation *Animation;
   animation GoingLeft;
   animation GoingRight;
-  animation Falling;
   animation Climbing;
   animation OnRope;
 };
