@@ -17,6 +17,12 @@ global bool GlobalRunning;
 global game_memory GameMemory;
 global game_offscreen_buffer GameBackBuffer;
 
+struct linux_game_code {
+  void *Library;
+  game_update_and_render *UpdateAndRender;
+  bool32 IsValid;
+};
+
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
 
@@ -50,6 +56,22 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
 }
 
 int main(int argc, char const *argv[]) {
+  // Load game code
+  linux_game_code Game;
+  {
+    Game.Library = dlopen("libloderunner.so", RTLD_NOW);
+    if (Game.Library != NULL) {
+      dlerror();  // clear error code
+      Game.UpdateAndRender =
+          (game_update_and_render *)dlsym(Game.Library, "GameUpdateAndRender");
+      char *err = dlerror();
+      if (err != NULL) {
+        Game.UpdateAndRender = GameUpdateAndRenderStub;
+        printf("Could not find GameUpdateAndRender: %s\n", err);
+      }
+    }
+  }
+
   Display *display;
   Window window;
   XEvent event;
@@ -82,6 +104,53 @@ int main(int argc, char const *argv[]) {
 
   Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(display, window, &wmDeleteMessage, 1);
+
+
+
+
+  // TODO:
+  // - init memory and backbuffer
+  // - init input
+  // - call update and render
+  // - get something to display
+
+
+
+
+  // Init game memory
+  {
+    GameMemory.MemorySize = 1024 * 1024 * 1024;  // 1 Gigabyte
+    GameMemory.Start =
+        VirtualAlloc(0, GameMemory.MemorySize, MEM_COMMIT, PAGE_READWRITE);
+    // SecureZeroMemory(GameMemory.Start, GameMemory.MemorySize);
+    GameMemory.Free = GameMemory.Start;
+    GameMemory.IsInitialized = true;
+
+    GameMemory.DEBUGPlatformReadEntireFile = DEBUGPlatformReadEntireFile;
+    // GameMemory.DEBUGPlatformWriteEntireFile =
+    // DEBUGPlatformWriteEntireFile;
+  }
+
+  // Init backbuffer
+  {
+    GameBackBuffer.MaxWidth = 2000;
+    GameBackBuffer.MaxHeight = 1500;
+    GameBackBuffer.BytesPerPixel = 4;
+
+    int BufferSize = GameBackBuffer.MaxWidth * GameBackBuffer.MaxHeight *
+                     GameBackBuffer.BytesPerPixel;
+    // TODO: put it into the game memory?
+    GameBackBuffer.Memory =
+        VirtualAlloc(0, BufferSize, MEM_COMMIT, PAGE_READWRITE);
+
+    GlobalBitmapInfo.bmiHeader.biSize = sizeof(GlobalBitmapInfo.bmiHeader);
+    GlobalBitmapInfo.bmiHeader.biPlanes = 1;
+    GlobalBitmapInfo.bmiHeader.biBitCount = 32;
+    GlobalBitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+    // Set up proper values of buffers based on actual client size
+    Win32ResizeClientWindow(Window);
+  }
 
   GlobalRunning = true;
 

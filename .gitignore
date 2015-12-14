@@ -28,4 +28,6 @@
 *.app
 
 
+# misc
 build/*
+*.sublime-*
