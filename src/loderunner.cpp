@@ -8,6 +8,8 @@ global player gPlayer;
 global level *Level;
 global sprites *Sprites;
 
+global bool32 gDrawDebug = false;
+
 global int kTileWidth = 32;
 global int kTileHeight = 32;
 global int kHumanWidth = 24;
@@ -306,8 +308,8 @@ void DrawTile(int Col, int Row) {
     DEBUGDrawImage(Position, Sprites->Rope);
   } else if (Value == LVL_TREASURE) {
     DEBUGDrawImage(Position, Sprites->Treasure);
-  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY ||
-             Value == LVL_WIN_LADDER) {
+  } else if (Value == LVL_BLANK || LVL_BLANK_TMP || Value == LVL_PLAYER ||
+             Value == LVL_ENEMY || Value == LVL_WIN_LADDER) {
     DEBUGDrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
 }
@@ -364,12 +366,17 @@ internal void DrawPlayer(player *Player) {
     // }
   }
 
-  v2 Position;
+  // Debug
+  if (gDrawDebug){
+    v2 TilePosition = {};
+    TilePosition.x = (r32)Player->TileX * kTileWidth;
+    TilePosition.y = (r32)Player->TileY * kTileWidth;
+    DEBUGDrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
+  }
+
+  v2 Position = {};
   Position.x = Player->Position.x - Player->Width / 2;
   Position.y = Player->Position.y - Player->Height / 2;
-
-  // Debug
-  // DEBUGDrawRectangle(Position, kTileWidth, kTileHeight, 0x00333333);
 
   DrawSprite(Position, Player->Sprite);
 }
@@ -485,6 +492,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Player->Width = Player->Sprite.Width;
     Player->Height = Player->Sprite.Height;
     Player->Animation = NULL;
+    Player->Facing = RIGHT;
 
     // Init animations
     {
@@ -636,6 +644,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedDown = Input->Down.EndedDown;
     bool32 PressedLeft = Input->Left.EndedDown;
     bool32 PressedRight = Input->Right.EndedDown;
+    bool32 PressedFire = Input->Fire.EndedDown;
+
+    if (Input->Debug.EndedDown) {
+      gDrawDebug = !gDrawDebug;
+    }
 
     r32 Speed = 4.0f;
 #ifdef BUILD_INTERNAL
@@ -646,6 +659,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 #endif
 
+    // TODO: make the player fall from the ladder only when he
+    // doesn't touch the ladder at all
     bool32 OnLadder = CheckTile(Player->TileY, Player->TileX) == LVL_LADDER;
 
     bool32 LadderBelow = false;
@@ -705,6 +720,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Player->Animation = &Player->RopeRight;
         }
         Animate = true;
+        Player->Facing = RIGHT;
       }
     }
 
@@ -720,6 +736,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Player->Animation = &Player->RopeLeft;
         }
         Animate = true;
+        Player->Facing = LEFT;
       }
     }
 
@@ -775,6 +792,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Update player tile
     Player->TileX = (int)Player->X / kTileWidth;
     Player->TileY = (int)Player->Y / kTileHeight;
+
+    // Fire
+    if (PressedFire && !IsFalling && !Player->FireCooldown) {
+      int TileY = Player->TileY + 1;
+      int TileX =
+          (Player->Facing == LEFT) ? Player->TileX - 1 : Player->TileX + 1;
+      // Check the tiles the player touches
+
+      if (CheckTile(TileY, TileX) == LVL_BRICK) {
+        Level->Contents[TileY][TileX] = LVL_BLANK;
+        DrawTile(TileX, TileY);
+        Player->FireCooldown = 30;
+      }
+    }
+    if (Player->FireCooldown > 0) Player->FireCooldown--;
   }
 
   if (Animate && !Turbo && Player->Animation != NULL) {

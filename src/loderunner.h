@@ -85,14 +85,18 @@ struct game_button_state {
 
 struct player_input {
   union {
-    game_button_state Buttons[5];
+    game_button_state Buttons[7];
 
     struct {
       game_button_state Up;
       game_button_state Down;
       game_button_state Left;
       game_button_state Right;
+      game_button_state Fire;
       game_button_state Turbo;
+      game_button_state Debug;
+      // NOTE: don't forget to update the number above
+      // if you add a new state
     };
   };
 };
@@ -120,6 +124,11 @@ struct animation {
   frame *Frames;
 };
 
+enum {
+  LEFT = 0,
+  RIGHT,
+};
+
 struct player {
   union {
     v2 Position;
@@ -132,6 +141,9 @@ struct player {
   int TileY;
   int Width;
   int Height;
+  int Facing;
+  int FireCooldown;
+
   sprite Sprite;
 
   // Animation
@@ -155,6 +167,7 @@ struct level {
 
 enum {
   LVL_BLANK,
+  LVL_BLANK_TMP,
   LVL_BRICK,
   LVL_BRICK_HARD,
   LVL_LADDER,

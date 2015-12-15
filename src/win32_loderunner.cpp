@@ -226,6 +226,14 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
         player_input *Player1 = &NewInput->Player1;
         player_input *Player2 = &NewInput->Player2;
 
+        bool32 AltKeyWasDown = (Message.lParam & (1 << 29));
+        if ((VKCode == VK_F4) && AltKeyWasDown) {
+          GlobalRunning = false;
+        }
+        if (VKCode == VK_ESCAPE) {
+          GlobalRunning = false;
+        }
+
         // Get input
         if (IsDown != WasDown) {
           if (VKCode == 'W') {
@@ -236,6 +244,8 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player1->Left, IsDown);
           } else if (VKCode == 'D') {
             Win32ProcessKeyboardMessage(&Player1->Right, IsDown);
+          } else if (VKCode == 'E') {
+            Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
           } else if (VKCode == VK_UP) {
             Win32ProcessKeyboardMessage(&Player2->Up, IsDown);
           } else if (VKCode == VK_DOWN) {
@@ -246,15 +256,14 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player2->Right, IsDown);
           } else if (VKCode == 'X') {
             Win32ProcessKeyboardMessage(&Player2->Turbo, IsDown);
+          } else if (VKCode == VK_SPACE) {
+            Win32ProcessKeyboardMessage(&Player2->Fire, IsDown);
+          } else if (VKCode == 'I') {
+#if BUILD_INTERNAL
+            Win32ProcessKeyboardMessage(&Player1->Debug, IsDown);
+            Win32ProcessKeyboardMessage(&Player2->Debug, IsDown);
+#endif
           }
-        }
-
-        bool32 AltKeyWasDown = (Message.lParam & (1 << 29));
-        if ((VKCode == VK_F4) && AltKeyWasDown) {
-          GlobalRunning = false;
-        }
-        if (VKCode == VK_ESCAPE) {
-          GlobalRunning = false;
         }
       } break;
 
