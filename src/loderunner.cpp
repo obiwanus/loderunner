@@ -803,11 +803,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           TileX = Player->TileX - 1;
         } else {
           TileX = Player->TileX;
+          // Adjust
+          Player->X += kHumanWidth / 2;
         }
       } else if (Player->Facing == RIGHT) {
         int BorderX = Player->TileX * kTileWidth + (kHumanWidth / 2 - 4);
         if (Player->X < BorderX) {
           TileX = Player->TileX;
+          // Adjust
+          Player->X -= kHumanWidth / 2;
         } else {
           TileX = Player->TileX + 1;
         }
