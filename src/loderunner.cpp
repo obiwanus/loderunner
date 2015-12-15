@@ -796,9 +796,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Fire
     if (PressedFire && !IsFalling && !Player->FireCooldown) {
       int TileY = Player->TileY + 1;
-      int TileX =
-          (Player->Facing == LEFT) ? Player->TileX - 1 : Player->TileX + 1;
-      // Check the tiles the player touches
+      int TileX = -10;
+      if (Player->Facing == LEFT) {
+        int BorderX = (Player->TileX + 1) * kTileWidth - (kHumanWidth / 2 - 4);
+        if (Player->X < BorderX) {
+          TileX = Player->TileX - 1;
+        } else {
+          TileX = Player->TileX;
+        }
+      } else if (Player->Facing == RIGHT) {
+        int BorderX = Player->TileX * kTileWidth + (kHumanWidth / 2 - 4);
+        if (Player->X < BorderX) {
+          TileX = Player->TileX;
+        } else {
+          TileX = Player->TileX + 1;
+        }
+      }
+      Assert(TileX != -10);
 
       if (CheckTile(TileY, TileX) == LVL_BRICK) {
         Level->Contents[TileY][TileX] = LVL_BLANK;
