@@ -632,6 +632,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   {
     player_input *Input = &NewInput->Player2;
 
+    bool32 PressedUp = Input->Up.EndedDown;
+    bool32 PressedDown = Input->Down.EndedDown;
+    bool32 PressedLeft = Input->Left.EndedDown;
+    bool32 PressedRight = Input->Right.EndedDown;
+
     r32 Speed = 4.0f;
 #ifdef BUILD_INTERNAL
     // Turbo
@@ -650,8 +655,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       int PlayerBottom = (int)Player->Y + Player->Height / 2;
       int TileTop = Row * kTileHeight;
       if (CheckTile(Row, Col) == LVL_LADDER) {
-        if (PlayerBottom + 3 >= TileTop)  // +3 to compensate float
-          LadderBelow = true;
+        if (PlayerBottom >= TileTop) LadderBelow = true;
       }
     }
 
@@ -689,7 +693,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     // Update based on movement keys
-    if (Input->Right.EndedDown && (!IsFalling || Turbo)) {
+    if (PressedRight && (!IsFalling || Turbo)) {
       r32 Old = Player->X;
       Player->X += Speed;
       if (!AcceptableMove(Player)) {
@@ -704,7 +708,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
-    if (Input->Left.EndedDown && (!IsFalling || Turbo)) {
+    if (PressedLeft && (!IsFalling || Turbo)) {
       r32 Old = Player->X;
       Player->X -= Speed;
       if (!AcceptableMove(Player)) {
@@ -719,40 +723,41 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
-    if (Input->Up.EndedDown && (CanClimb || Turbo)) {
+    bool32 Climbing = false;
+    if (PressedUp && (CanClimb || Turbo)) {
       r32 Old = Player->Y;
       Player->Y -= Speed;
-      if (!AcceptableMove(Player)) {
+
+      // @refactor?
+      int PlayerTile = CheckTile(Player->TileY, Player->TileX);
+      int PlayerBottom = (int)Player->Y + Player->Height / 2;
+
+      bool32 GotFlying =
+          (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
+           PlayerTile == LVL_ROPE) &&
+          (PlayerBottom < (Player->TileY + 1) * kTileHeight);
+
+      if (!AcceptableMove(Player) || GotFlying && !Turbo) {
         Player->Y = Old;
       } else {
+        Climbing = true;
         Player->Animation = &Player->Climbing;
         Animate = true;
       }
     }
 
-    bool32 CanDescend = false;
-    if (Input->Down.EndedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
+    bool32 Descending = false;
+    if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
       r32 Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
       } else if (LadderBelow || CanClimb) {
-        CanDescend = true;
+        Descending = true;
         Player->Animation = &Player->Climbing;
         Animate = true;
       }
     }
-
-
-
-
-    // TODO:
-    // - Fix the top ladder bug
-    // - Don't try to climb down and stick if there's no ladder below
-    // - Crush bricks!
-
-
-
 
     if (IsFalling) {
       Player->Sprite = Sprites->Falling;
@@ -760,9 +765,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     // Adjust player on ladder
-    if (CanClimb && (Input->Up.EndedDown || (CanDescend && Input->Down.EndedDown))) {
+    if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
       Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
     }
+
+    Animate = Animate && !(PressedDown && PressedUp) &&
+              !(PressedLeft && PressedRight);
 
     // Update player tile
     Player->TileX = (int)Player->X / kTileWidth;
