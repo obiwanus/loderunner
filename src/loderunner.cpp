@@ -703,6 +703,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Animate = true;
       }
     }
+
     if (Input->Left.EndedDown && (!IsFalling || Turbo)) {
       r32 Old = Player->X;
       Player->X -= Speed;
@@ -717,6 +718,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Animate = true;
       }
     }
+
     if (Input->Up.EndedDown && (CanClimb || Turbo)) {
       r32 Old = Player->Y;
       Player->Y -= Speed;
@@ -727,12 +729,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Animate = true;
       }
     }
+
+    bool32 CanDescend = false;
     if (Input->Down.EndedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
       r32 Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
       } else if (LadderBelow || CanClimb) {
+        CanDescend = true;
         Player->Animation = &Player->Climbing;
         Animate = true;
       }
@@ -755,7 +760,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     // Adjust player on ladder
-    if (CanClimb && (Input->Up.EndedDown || Input->Down.EndedDown)) {
+    if (CanClimb && (Input->Up.EndedDown || (CanDescend && Input->Down.EndedDown))) {
       Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
     }
 
