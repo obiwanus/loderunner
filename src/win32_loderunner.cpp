@@ -4,7 +4,11 @@
 #include <windows.h>
 #include <intrin.h>
 
-#include "win32_loderunner.h"
+struct win32_game_code {
+  HMODULE GameCodeDLL;
+  game_update_and_render *UpdateAndRender;
+  bool32 IsValid;
+};
 
 global bool GlobalRunning;
 
@@ -296,12 +300,12 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   QueryPerformanceFrequency(&GlobalPerformanceFrequency);
 
   if (RegisterClass(&WindowClass)) {
-    int WindowWidth = 1500;
-    int WindowHeight = 1000;
+    const int kWindowWidth = 1500;
+    const int kWindowHeight = 1000;
 
     HWND Window = CreateWindow(WindowClass.lpszClassName, 0,
                                WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT,
-                               CW_USEDEFAULT, WindowWidth, WindowHeight, 0, 0,
+                               CW_USEDEFAULT, kWindowWidth, kWindowHeight, 0, 0,
                                hInstance, 0);
 
     // We're not going to release it as we use CS_OWNDC
@@ -309,7 +313,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     HBRUSH BgBrush = CreateSolidBrush(RGB(0x00, 0x22, 0x22));
     SelectObject(hdc, BgBrush);
-    PatBlt(hdc, 0, 0, WindowWidth, WindowHeight, PATCOPY);
+    PatBlt(hdc, 0, 0, kWindowWidth, kWindowHeight, PATCOPY);
     DeleteObject(BgBrush);
 
     if (Window) {

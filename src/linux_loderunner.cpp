@@ -2,9 +2,11 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-// #include <X11/Xos.h>
+#include <X11/Xos.h>
 #include <dlfcn.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>  // usleep
 
 #if BUILD_SLOW
 #include <signal.h>
@@ -12,16 +14,17 @@
 
 #include "loderunner.h"
 
-global bool GlobalRunning;
-
-global game_memory GameMemory;
-global game_offscreen_buffer GameBackBuffer;
-
 struct linux_game_code {
   void *Library;
   game_update_and_render *UpdateAndRender;
   bool32 IsValid;
 };
+
+global bool GlobalRunning;
+
+global game_memory GameMemory;
+global game_offscreen_buffer GameBackBuffer;
+global XImage *gXImage;
 
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
@@ -59,7 +62,7 @@ int main(int argc, char const *argv[]) {
   // Load game code
   linux_game_code Game;
   {
-    Game.Library = dlopen("libloderunner.so", RTLD_NOW);
+    Game.Library = dlopen("gamecode.so", RTLD_NOW);
     if (Game.Library != NULL) {
       dlerror();  // clear error code
       Game.UpdateAndRender =
@@ -90,22 +93,25 @@ int main(int argc, char const *argv[]) {
   u32 border_color = WhitePixel(display, screen);
   u32 bg_color = BlackPixel(display, screen);
 
-  printf("white: %u\n", border_color);
-  printf("black: %u\n", bg_color);
+  const int kWindowWidth = 1500;
+  const int kWindowHeight = 1000;
 
   window = XCreateSimpleWindow(display, RootWindow(display, screen), 300, 300,
-                               500, 500, 1, border_color, bg_color);
+                               kWindowWidth, kWindowHeight, 0, border_color,
+                               bg_color);
 
   XSetStandardProperties(display, window, "My Window", "Hi!", None, NULL, 0,
                          NULL);
 
   XSelectInput(display, window, ExposureMask | KeyPressMask | ButtonPressMask);
-  XMapWindow(display, window);
+  XMapRaised(display, window);
 
   Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(display, window, &wmDeleteMessage, 1);
 
+  // XSync(display, True);
 
+  usleep(5000);  // 50 ms
 
 
   // TODO:
@@ -120,36 +126,46 @@ int main(int argc, char const *argv[]) {
   // Init game memory
   {
     GameMemory.MemorySize = 1024 * 1024 * 1024;  // 1 Gigabyte
-    GameMemory.Start =
-        VirtualAlloc(0, GameMemory.MemorySize, MEM_COMMIT, PAGE_READWRITE);
-    // SecureZeroMemory(GameMemory.Start, GameMemory.MemorySize);
+    GameMemory.Start = malloc(GameMemory.MemorySize);
     GameMemory.Free = GameMemory.Start;
     GameMemory.IsInitialized = true;
 
     GameMemory.DEBUGPlatformReadEntireFile = DEBUGPlatformReadEntireFile;
-    // GameMemory.DEBUGPlatformWriteEntireFile =
-    // DEBUGPlatformWriteEntireFile;
   }
 
   // Init backbuffer
+  GameBackBuffer.MaxWidth = 2000;
+  GameBackBuffer.MaxHeight = 1500;
+  GameBackBuffer.BytesPerPixel = 4;
+
+  int BufferSize = GameBackBuffer.MaxWidth * GameBackBuffer.MaxHeight *
+                   GameBackBuffer.BytesPerPixel;
+
+  GameBackBuffer.Memory = malloc(BufferSize);
+
+  Pixmap pixmap;
+  GC gc;
+  XGCValues gcvalues;
+
+  // Create x image
   {
-    GameBackBuffer.MaxWidth = 2000;
-    GameBackBuffer.MaxHeight = 1500;
-    GameBackBuffer.BytesPerPixel = 4;
+    int depth = 32;
+    int bitmap_pad = 32;
+    int bytes_per_line = 0;
+    int offset = 0;
+    gXImage = XCreateImage(display, CopyFromParent, depth, ZPixmap, offset,
+                           (char *)GameBackBuffer.Memory, kWindowWidth,
+                           kWindowHeight, bitmap_pad, bytes_per_line);
 
-    int BufferSize = GameBackBuffer.MaxWidth * GameBackBuffer.MaxHeight *
-                     GameBackBuffer.BytesPerPixel;
-    // TODO: put it into the game memory?
-    GameBackBuffer.Memory =
-        VirtualAlloc(0, BufferSize, MEM_COMMIT, PAGE_READWRITE);
+    u32 *Pixel = (u32 *)gXImage->data;
+    for (int i = 0; i < kWindowWidth * 700; i++) {
+      *Pixel = 0x00FF00FF;
+      Pixel++;
+    }
 
-    GlobalBitmapInfo.bmiHeader.biSize = sizeof(GlobalBitmapInfo.bmiHeader);
-    GlobalBitmapInfo.bmiHeader.biPlanes = 1;
-    GlobalBitmapInfo.bmiHeader.biBitCount = 32;
-    GlobalBitmapInfo.bmiHeader.biCompression = BI_RGB;
-
-    // Set up proper values of buffers based on actual client size
-    Win32ResizeClientWindow(Window);
+    pixmap = XCreatePixmap(display, window, kWindowWidth,
+                           kWindowHeight, depth);
+    gc = XCreateGC(display, pixmap, 0, &gcvalues);
   }
 
   GlobalRunning = true;
@@ -168,11 +184,10 @@ int main(int argc, char const *argv[]) {
         char symbol = buf[0];
         if (symbol == 'q') {
           GlobalRunning = false;
+        } else if (symbol == 'd') {
+          printf("Put image!\n");
+          XPutImage(display, pixmap, gc, gXImage, 0, 0, 0, 0, kWindowWidth, kWindowHeight);
         }
-      }
-      if (event.type == ButtonPress) {
-        printf("Click at (%i, %i)\n", event.xbutton.x, event.xbutton.y);
-        XMoveWindow(display, window, event.xbutton.x, event.xbutton.y);
       }
       if (event.type == ClientMessage) {
         if (event.xclient.data.l[0] == wmDeleteMessage) {
@@ -182,7 +197,7 @@ int main(int argc, char const *argv[]) {
       // TODO: collect input
     }
 
-
+    // TODO: limit FPS
 
   }
 

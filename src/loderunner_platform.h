@@ -27,10 +27,10 @@ typedef i32 bool32;
   if (!(Expression)) {     \
     *(int *)0 = 0;         \
   }
-#define set_breakpoint raise(SIGINT)
+#define breakpoint raise(SIGINT)
 #else
 #define Assert(Expression)
-#define set_breakpoint
+#define breakpoint
 #endif
 
 #define COUNT_OF(x) \
