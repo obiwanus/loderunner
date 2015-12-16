@@ -31,3 +31,10 @@
 # misc
 build/*
 *.sublime-*
+*.creator*
+
+# qt creator stuff
+Loderunner.config
+Loderunner.creator
+Loderunner.files
+Loderunner.includes

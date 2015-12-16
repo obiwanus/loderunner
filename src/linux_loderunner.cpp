@@ -115,13 +115,8 @@ int main(int argc, char const *argv[]) {
 
 
   // TODO:
-  // - init memory and backbuffer
   // - init input
   // - call update and render
-  // - get something to display
-
-
-
 
   // Init game memory
   {
@@ -149,24 +144,37 @@ int main(int argc, char const *argv[]) {
 
   // Create x image
   {
-    int depth = 32;
-    int bitmap_pad = 32;
-    int bytes_per_line = 0;
-    int offset = 0;
-    gXImage = XCreateImage(display, CopyFromParent, depth, ZPixmap, offset,
-                           (char *)GameBackBuffer.Memory, kWindowWidth,
-                           kWindowHeight, bitmap_pad, bytes_per_line);
+    // int depth = 32;
+    // int bitmap_pad = 32;
+    // int bytes_per_line = 0;
+    // int offset = 0;
 
-    u32 *Pixel = (u32 *)gXImage->data;
-    for (int i = 0; i < kWindowWidth * 700; i++) {
-      *Pixel = 0x00FF00FF;
-      Pixel++;
-    }
+    // gXImage = XCreateImage(display, CopyFromParent, depth, ZPixmap, offset,
+    //                        (char *)GameBackBuffer.Memory, kWindowWidth,
+    //                        kWindowHeight, bitmap_pad, bytes_per_line);
 
-    pixmap = XCreatePixmap(display, window, kWindowWidth,
-                           kWindowHeight, depth);
-    gc = XCreateGC(display, pixmap, 0, &gcvalues);
+    // TODO: find a way to do it with a newly created image
+    usleep(500000);
+    gXImage = XGetImage(display, window, 0, 0, kWindowWidth, kWindowHeight, AllPlanes, ZPixmap);
+
+    GameBackBuffer.Memory = (void *)gXImage->data;
+
+    // u32 *Pixel = (u32 *)gXImage->data;
+    // for (int i = 0; i < kWindowWidth * 700; i++) {
+    //   *Pixel = 0x00FF00FF;
+    //   Pixel++;
+    // }
+
+    // pixmap = XCreatePixmap(display, window, kWindowWidth,
+    //                        kWindowHeight, depth);
+    gc = XCreateGC(display, window, 0, &gcvalues);
   }
+
+  // Get space for inputs
+  game_input Input[2];
+  game_input *OldInput = &Input[0];
+  game_input *NewInput = &Input[1];
+  *NewInput = {};
 
   GlobalRunning = true;
 
@@ -184,9 +192,6 @@ int main(int argc, char const *argv[]) {
         char symbol = buf[0];
         if (symbol == 'q') {
           GlobalRunning = false;
-        } else if (symbol == 'd') {
-          printf("Put image!\n");
-          XPutImage(display, pixmap, gc, gXImage, 0, 0, 0, 0, kWindowWidth, kWindowHeight);
         }
       }
       if (event.type == ClientMessage) {
@@ -196,6 +201,29 @@ int main(int argc, char const *argv[]) {
       }
       // TODO: collect input
     }
+
+    // Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory);
+
+    // Swap inputs
+    game_input *TmpInput = OldInput;
+    OldInput = NewInput;
+    NewInput = TmpInput;
+    *NewInput = {};  // zero everything
+
+    // Retain the EndedDown state
+    for (int PlayerNum = 0; PlayerNum < COUNT_OF(NewInput->Players);
+         PlayerNum++) {
+      player_input *OldPlayerInput = &OldInput->Players[PlayerNum];
+      player_input *NewPlayerInput = &NewInput->Players[PlayerNum];
+      for (int ButtonNum = 0; ButtonNum < COUNT_OF(OldPlayerInput->Buttons);
+           ButtonNum++) {
+        NewPlayerInput->Buttons[ButtonNum].EndedDown =
+            OldPlayerInput->Buttons[ButtonNum].EndedDown;
+      }
+    }
+
+    XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth, kWindowHeight);
+
 
     // TODO: limit FPS
 
