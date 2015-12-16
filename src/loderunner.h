@@ -4,6 +4,8 @@
 #include "loderunner_platform.h"
 #include "loderunner_math.h"
 
+void *GameMemoryAlloc(int SizeInBytes);
+
 struct game_offscreen_buffer {
   void *Memory;
   int Width;
@@ -71,6 +73,7 @@ struct sprites {
   bmp_file *Treasure;
   bmp_file *Sprites;  // crazy
   sprite Falling;
+  sprite Breaking;
 };
 
 struct file_read_result {
@@ -147,13 +150,29 @@ struct player {
   sprite Sprite;
 
   // Animation
-  int AnimationCounter;
+  int AnimationCounter = 0;
   animation *Animation;
   animation GoingLeft;
   animation GoingRight;
   animation Climbing;
   animation RopeLeft;
   animation RopeRight;
+};
+
+struct crushed_brick {
+  bool32 IsUsed = false;
+  int TileX;
+  int TileY;
+  int Width;
+  int Height;
+
+  int TimeToLive = 8;  // seconds
+
+  sprite Sprite;
+
+  int AnimationCounter = 0;
+  animation Breaking;
+  animation Restoring;
 };
 
 #define MAX_LEVEL_HEIGHT 100

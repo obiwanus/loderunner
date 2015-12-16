@@ -15,6 +15,12 @@ global int kTileHeight = 32;
 global int kHumanWidth = 24;
 global int kHumanHeight = 32;
 
+global const int kCrushedBrickCount = 30;
+global crushed_brick CrushedBricks[kCrushedBrickCount];
+global int NextBrickAvailable = 0;
+global frame *BreakingFrames = NULL;
+global frame *RestoringFrames = NULL;
+
 inline int TruncateReal32(r32 Value) {
   int Result = (int)Value;
   return Result;
@@ -367,7 +373,7 @@ internal void DrawPlayer(player *Player) {
   }
 
   // Debug
-  if (gDrawDebug){
+  if (gDrawDebug) {
     v2 TilePosition = {};
     TilePosition.x = (r32)Player->TileX * kTileWidth;
     TilePosition.y = (r32)Player->TileY * kTileWidth;
@@ -466,9 +472,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Load sprites
   if (!Sprites) {
-    kTileWidth = 32;
-    kTileHeight = 32;
-
     // @rewrite: put all environment in the sprites
 
     Sprites = (sprites *)GameMemoryAlloc(sizeof(sprites));
@@ -479,11 +482,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Sprites->Treasure = LoadSprite("img/treasure.bmp");
     Sprites->Sprites = LoadSprite("img/sprites.bmp");
 
+    // TODO: do something about it
     Sprites->Falling.Image = Sprites->Sprites;
     Sprites->Falling.XOffset = 72;
     Sprites->Falling.YOffset = 0;
     Sprites->Falling.Width = kHumanWidth;
     Sprites->Falling.Height = kHumanHeight;
+
+    Sprites->Breaking.Image = Sprites->Sprites;
+    Sprites->Breaking.XOffset = 0;
+    Sprites->Breaking.YOffset = 0;
+    Sprites->Breaking.Width = kTileWidth;
+    Sprites->Breaking.Height = kTileHeight * 2;
   }
 
   // Init player
@@ -818,10 +828,39 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Assert(TileX != -10);
 
+      // @refactor: be consistent with the order of TileX, TileY
+      // and maybe even the names (Col, Row)
       if (CheckTile(TileY, TileX) == LVL_BRICK) {
+        // Crush the brick
         Level->Contents[TileY][TileX] = LVL_BLANK;
         DrawTile(TileX, TileY);
         Player->FireCooldown = 30;
+
+        // Remember that
+        crushed_brick *Brick = &CrushedBricks[NextBrickAvailable];
+        NextBrickAvailable = (NextBrickAvailable + 1) % kCrushedBrickCount;
+
+        Assert(Brick->IsUsed == false);
+
+        Brick->IsUsed = true;
+        Brick->TileX = TileX;
+        Brick->TileY = TileY;
+        Brick->Width = 32;
+        Brick->Height = 64;
+        Brick->Sprite = Sprites->Breaking;
+
+        // Init animations
+        animation *Animation;
+
+        Animation = &Brick->Breaking;
+        Animation->FrameCount = 2;
+        if (BreakingFrames == NULL) {
+          BreakingFrames =
+              (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
+          BreakingFrames[0] = {96, 32, 10};
+          BreakingFrames[1] = {128, 32, 20};
+        }
+        Animation->Frames = BreakingFrames;
       }
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
@@ -841,14 +880,53 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
       DrawPlayer(Player);
 
-      Animation->Frame += 1;
-      if (Animation->Frame >= Animation->FrameCount) {
-        Animation->Frame = 0;
-      }
+      Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
     }
 
     Player->AnimationCounter += 1;
   } else {
     DrawPlayer(Player);
+  }
+
+
+
+  // TODO:
+  // - Fix the animation of bricks
+  // - Rewrite the animation system
+
+
+
+  // Animate bricks
+  for (int i = 0; i < kCrushedBrickCount; i++) {
+    crushed_brick *Brick = &CrushedBricks[i];
+    if (Brick->IsUsed) {
+
+      // @copypaste
+      animation *Animation = &Brick->Breaking;
+      frame *Frame = &Animation->Frames[Animation->Frame];
+
+      // Don't show more frames than there is
+      if (Animation->Frame == Animation->FrameCount) {
+        continue;
+      }
+
+      if (Brick->AnimationCounter > Frame->Lasting) {
+        Brick->AnimationCounter = 0;
+      }
+
+      if (Brick->AnimationCounter == 0) {
+        Brick->Sprite.XOffset = Frame->XOffset;
+        Brick->Sprite.YOffset = Frame->YOffset;
+
+        Animation->Frame++;
+      }
+
+      v2 Position = {};
+      Position.x = (r32)Brick->TileX * kTileWidth;
+      Position.y = (r32)(Brick->TileY - 1) * kTileHeight;
+      DrawSprite(Position, Brick->Sprite);
+
+      Brick->AnimationCounter += 1;
+    }
   }
 }
