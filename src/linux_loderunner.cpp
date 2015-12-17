@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>  // usleep
+#include <limits.h>
 
 #if BUILD_SLOW
 #include <signal.h>
@@ -29,40 +30,33 @@ global XImage *gXImage;
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
 
-  // HANDLE FileHandle = CreateFile(Filename, GENERIC_READ, FILE_SHARE_READ, 0,
-  //                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  FILE *f = fopen(Filename, "rb");
+  if (f == NULL) {
+    printf("Cannot open file: %s\n", Filename);
+    exit(1);
+  }
 
-  // if (FileHandle != INVALID_HANDLE_VALUE) {
-  //   LARGE_INTEGER FileSize;
-  //   if (GetFileSizeEx(FileHandle, &FileSize)) {
-  //     Result.MemorySize = FileSize.QuadPart;
-  //     Result.Memory =
-  //         VirtualAlloc(0, Result.MemorySize, MEM_COMMIT, PAGE_READWRITE);
-  //     DWORD BytesRead = 0;
+  fseek(f, 0, SEEK_END);
+  long fsize = ftell(f);
+  fseek(f, 0, SEEK_SET);
 
-  //     ReadFile(FileHandle, Result.Memory, (u32)Result.MemorySize, &BytesRead,
-  //              0);
-
-  //     CloseHandle(FileHandle);
-
-  //     return Result;
-  //   } else {
-  //     OutputDebugStringA("Cannot get file size\n");
-  //     // GetLastError() should help
-  //   }
-  // } else {
-  //   OutputDebugStringA("Cannot read from file\n");
-  //   // GetLastError() should help
-  // }
+  Result.MemorySize = fsize;
+  Result.Memory = malloc(fsize);
+  fread(Result.Memory, fsize, 1, f);
+  fclose(f);
 
   return Result;
 }
 
 int main(int argc, char const *argv[]) {
   // Load game code
-  linux_game_code Game;
+  linux_game_code Game = {};
   {
-    Game.Library = dlopen("gamecode.so", RTLD_NOW);
+    char path_to_exec[PATH_MAX];
+    char path_to_so[PATH_MAX];
+    readlink("/proc/self/exe", path_to_exec, PATH_MAX);
+    sprintf(path_to_so, "%s.so", path_to_exec);
+    Game.Library = dlopen(path_to_so, RTLD_NOW);
     if (Game.Library != NULL) {
       dlerror();  // clear error code
       Game.UpdateAndRender =
@@ -71,9 +65,12 @@ int main(int argc, char const *argv[]) {
       if (err != NULL) {
         Game.UpdateAndRender = GameUpdateAndRenderStub;
         printf("Could not find GameUpdateAndRender: %s\n", err);
+      } else {
+        Game.IsValid = true;
       }
     }
   }
+  Assert(Game.IsValid);
 
   Display *display;
   Window window;
@@ -133,6 +130,10 @@ int main(int argc, char const *argv[]) {
   GameBackBuffer.MaxHeight = 1500;
   GameBackBuffer.BytesPerPixel = 4;
 
+  // @tmp
+  GameBackBuffer.Width = kWindowWidth;
+  GameBackBuffer.Height = kWindowHeight;
+
   int BufferSize = GameBackBuffer.MaxWidth * GameBackBuffer.MaxHeight *
                    GameBackBuffer.BytesPerPixel;
 
@@ -181,28 +182,28 @@ int main(int argc, char const *argv[]) {
   while (GlobalRunning) {
 
     // Process events
-    {
-      XNextEvent(display, &event);
-      if (event.type == Expose) {
-        XFillRectangle(display, window, DefaultGC(display, screen), 20, 20, 10,
-                       10);
-      }
-      if (event.type == KeyPress &&
-          XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
-        char symbol = buf[0];
-        if (symbol == 'q') {
-          GlobalRunning = false;
-        }
-      }
-      if (event.type == ClientMessage) {
-        if (event.xclient.data.l[0] == wmDeleteMessage) {
-          GlobalRunning = false;
-        }
-      }
-      // TODO: collect input
-    }
+    // {
+    //   XNextEvent(display, &event);
+    //   if (event.type == Expose) {
+    //     XFillRectangle(display, window, DefaultGC(display, screen), 20, 20, 10,
+    //                    10);
+    //   }
+    //   if (event.type == KeyPress &&
+    //       XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
+    //     char symbol = buf[0];
+    //     if (symbol == 'q') {
+    //       GlobalRunning = false;
+    //     }
+    //   }
+    //   if (event.type == ClientMessage) {
+    //     if (event.xclient.data.l[0] == wmDeleteMessage) {
+    //       GlobalRunning = false;
+    //     }
+    //   }
+    //   // TODO: collect input
+    // }
 
-    // Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory);
+    Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory);
 
     // Swap inputs
     game_input *TmpInput = OldInput;
