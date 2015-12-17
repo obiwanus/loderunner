@@ -193,8 +193,7 @@ internal void DrawSprite(v2i Position, sprite Sprite) {
   }
 }
 
-// TODO: be consistent
-bool32 CheckTile(int Row, int Col) {
+bool32 CheckTile(int Col, int Row) {
   if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
     return -1;  // Invalid tile
   }
@@ -209,7 +208,7 @@ void DrawTile(int Col, int Row) {
   v2i Position = {};
   Position.x = (Col * kTileWidth);
   Position.y = (Row * kTileHeight);
-  int Value = CheckTile(Row, Col);
+  int Value = CheckTile(Col, Row);
   if (Value == LVL_BRICK) {
     DEBUGDrawImage(Position, Sprites->Brick);
   } else if (Value == LVL_LADDER) {
@@ -358,7 +357,7 @@ bool32 AcceptableMove(player *Player) {
 
   for (int Row = StartRow; Row <= EndRow; Row++) {
     for (int Col = StartCol; Col <= EndCol; Col++) {
-      int Tile = CheckTile(Row, Col);
+      int Tile = CheckTile(Col, Row);
       if (Tile != LVL_BRICK && Tile != LVL_BRICK_HARD) continue;
 
       // Collision check
@@ -572,7 +571,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // TODO: make the player fall from the ladder only when he
     // doesn't touch the ladder at all
-    bool32 OnLadder = CheckTile(Player->TileY, Player->TileX) == LVL_LADDER;
+    bool32 OnLadder = CheckTile(Player->TileX, Player->TileY) == LVL_LADDER;
 
     bool32 LadderBelow = false;
     {
@@ -580,7 +579,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       int Row = Player->TileY + 1;
       int PlayerBottom = (int)Player->Y + Player->Height / 2;
       int TileTop = Row * kTileHeight;
-      if (CheckTile(Row, Col) == LVL_LADDER) {
+      if (CheckTile(Col, Row) == LVL_LADDER) {
         if (PlayerBottom >= TileTop) LadderBelow = true;
       }
     }
@@ -593,7 +592,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     bool32 OnRope = false;
-    if (CheckTile(Player->TileY, Player->TileX) == LVL_ROPE) {
+    if (CheckTile(Player->TileX, Player->TileY) == LVL_ROPE) {
       int RopeY = Player->TileY * kTileHeight;
       int PlayerTop = (int)Player->Y - Player->Height / 2;
       OnRope = (PlayerTop == RopeY) ||
@@ -658,7 +657,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player->Y -= Speed;
 
       // @refactor?
-      int PlayerTile = CheckTile(Player->TileY, Player->TileX);
+      int PlayerTile = CheckTile(Player->TileX, Player->TileY);
       int PlayerBottom = (int)Player->Y + Player->Height / 2;
 
       bool32 GotFlying =
@@ -725,9 +724,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Assert(TileX != -10);
 
-      // @refactor: be consistent with the order of TileX, TileY
-      // and maybe even the names (Col, Row)
-      if (CheckTile(TileY, TileX) == LVL_BRICK) {
+      if (CheckTile(TileX, TileY) == LVL_BRICK) {
         // Crush the brick
         Level->Contents[TileY][TileX] = LVL_BLANK;
         DrawTile(TileX, TileY);
