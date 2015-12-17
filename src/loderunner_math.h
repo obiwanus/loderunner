@@ -70,6 +70,77 @@ inline v2 operator-(v2 A) {
   return Result;
 }
 
+// -------------------------------------
+
+union v2i {
+  struct {
+    int x, y;
+  };
+  struct {
+    int u, v;
+  };
+  int E[2];
+};
+
+inline v2i operator*(int Scalar, v2i A) {
+  v2i Result;
+
+  Result.x = A.x * Scalar;
+  Result.y = A.y * Scalar;
+
+  return Result;
+}
+
+inline v2i operator*(v2i A, int Scalar) { return Scalar * A; }
+
+inline v2i &operator*=(v2i &A, int Scalar) {
+  A = A * Scalar;
+
+  return A;
+}
+
+inline v2i operator+(v2i A, v2i B) {
+  v2i Result;
+
+  Result.x = A.x + B.x;
+  Result.y = A.y + B.y;
+
+  return Result;
+}
+
+inline v2i &operator+=(v2i &A, v2i B) {
+  A = A + B;
+
+  return A;
+}
+
+inline v2i operator-(v2i A, v2i B) {
+  v2i Result;
+
+  Result.x = A.x - B.x;
+  Result.y = A.y - B.y;
+
+  return Result;
+}
+
+inline v2i &operator-=(v2i &A, v2i B) {
+  A = A - B;
+
+  return A;
+}
+
+// Unary
+inline v2i operator-(v2i A) {
+  v2i Result;
+
+  Result.x = -A.x;
+  Result.y = -A.y;
+
+  return Result;
+}
+
+// -------------------------------------
+
 inline r32 Square(r32 Real32) { return Real32 * Real32; }
 
 inline int Square(int Int) { return Int * Int; }

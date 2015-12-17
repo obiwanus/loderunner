@@ -137,10 +137,10 @@ enum {
 
 struct player {
   union {
-    v2 Position;
+    v2i Position;
     struct {
-      r32 X;
-      r32 Y;
+      int X;
+      int Y;
     };
   };
   int TileX;

@@ -19,16 +19,6 @@ global const int kCrushedBrickCount = 30;
 global crushed_brick CrushedBricks[kCrushedBrickCount];
 global int NextBrickAvailable = 0;
 
-inline int TruncateReal32(r32 Value) {
-  int Result = (int)Value;
-  return Result;
-}
-
-inline int RoundReal32(r32 Value) {
-  // TODO: think about overflow
-  return TruncateReal32(Value + 0.5f);
-}
-
 void *GameMemoryAlloc(int SizeInBytes) {
   void *Result = GameMemory->Free;
 
@@ -59,10 +49,9 @@ inline u8 UnmaskColor(u32 Pixel, u32 ColorMask) {
   return (u8)((Pixel & ColorMask) >> BitOffset);
 }
 
-internal void DEBUGDrawRectangle(v2 Position, int Width, int Height,
-                                 u32 Color) {
-  int X = (int)Position.x;
-  int Y = (int)Position.y;
+internal void DrawRectangle(v2i Position, int Width, int Height, u32 Color) {
+  int X = Position.x;
+  int Y = Position.y;
 
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
   u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
@@ -85,91 +74,7 @@ inline void SetPixel(int X, int Y, u32 Color) {
   *Pixel = Color;
 }
 
-internal void DrawLine(r32 StartX, r32 StartY, r32 EndX, r32 EndY, u32 Color) {
-  // Bresenham's algorithm
-  r32 DeltaX = EndX - StartX;
-  r32 DeltaY = EndY - StartY;
-  int SignX = (DeltaX < 0) ? -1 : 1;
-  int SignY = (DeltaY < 0) ? -1 : 1;
-  int X = (int)StartX;
-  int Y = (int)StartY;
-  r32 Error = 0;
-
-  if (DeltaX) {
-    r32 DeltaErr = Abs(DeltaY / DeltaX);
-    while (X != (int)EndX) {
-      SetPixel(X, Y, Color);
-      X += SignX;
-      Error += DeltaErr;
-      while (Error >= 0.5f) {
-        SetPixel(X, Y, Color);
-        Y += SignY;
-        Error -= 1.0f;
-      }
-    }
-  } else if (DeltaY) {
-    while (Y != (int)EndY) {
-      SetPixel(X, Y, Color);
-      Y += SignY;
-    }
-  }
-}
-
-internal void DEBUGDrawCircle(v2 Center, int Radius, u32 Color) {
-  int X = (int)Center.x - Radius;
-  int Y = (int)Center.y - Radius;
-  int Height = Radius * 2;
-  int Width = Radius * 2;
-  int CenterX = (int)Center.x;
-  int CenterY = (int)Center.y;
-  int RadiusSq = Radius * Radius;
-
-  int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
-  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
-            X * GameBackBuffer->BytesPerPixel;
-
-  for (int pY = Y; pY < Y + Height; pY++) {
-    int *Pixel = (int *)Row;
-    for (int pX = X; pX < X + Width; pX++) {
-      int nX = CenterX - pX;
-      int nY = CenterY - pY;
-      if ((nX * nX + nY * nY) <= RadiusSq) {
-        *Pixel = Color;
-      }
-      Pixel++;
-    }
-    Row += Pitch;
-  }
-}
-
-internal void DEBUGDrawEllipse(v2 Center, int Width, int Height, u32 Color) {
-  int X = (int)Center.x - Width / 2;
-  int Y = (int)Center.y - Height / 2;
-  int CenterX = (int)Center.x;
-  int CenterY = (int)Center.y;
-  int HeightSq = Height * Height / 4;
-  int WidthSq = Width * Width / 4;
-  int RadiusSq = HeightSq * WidthSq;
-
-  int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
-  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
-            X * GameBackBuffer->BytesPerPixel;
-
-  for (int pY = Y; pY < Y + Height; pY++) {
-    int *Pixel = (int *)Row;
-    for (int pX = X; pX < X + Width; pX++) {
-      int nX = CenterX - pX;
-      int nY = CenterY - pY;
-      if ((nX * nX * HeightSq + nY * nY * WidthSq) <= RadiusSq) {
-        *Pixel = Color;
-      }
-      Pixel++;
-    }
-    Row += Pitch;
-  }
-}
-
-internal void DEBUGDrawImage(v2 Position, bmp_file *Image) {
+internal void DEBUGDrawImage(v2i Position, bmp_file *Image) {
   int Width = Image->Width;
   int Height = Image->Height;
   int X = (int)Position.x;
@@ -226,7 +131,7 @@ internal void DEBUGDrawImage(v2 Position, bmp_file *Image) {
   }
 }
 
-internal void DrawSprite(v2 Position, sprite Sprite) {
+internal void DrawSprite(v2i Position, sprite Sprite) {
   // @copypaste - possibly can me merged with DEBUGDrawImage
 
   int Width = Sprite.Width;
@@ -288,6 +193,7 @@ internal void DrawSprite(v2 Position, sprite Sprite) {
   }
 }
 
+// TODO: be consistent
 bool32 CheckTile(int Row, int Col) {
   if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
     return -1;  // Invalid tile
@@ -300,9 +206,9 @@ void DrawTile(int Col, int Row) {
     // Don't draw outside level boundaries
     return;
   }
-  v2 Position = {};
-  Position.x = (r32)(Col * kTileWidth);
-  Position.y = (r32)(Row * kTileHeight);
+  v2i Position = {};
+  Position.x = (Col * kTileWidth);
+  Position.y = (Row * kTileHeight);
   int Value = CheckTile(Row, Col);
   if (Value == LVL_BRICK) {
     DEBUGDrawImage(Position, Sprites->Brick);
@@ -314,7 +220,7 @@ void DrawTile(int Col, int Row) {
     DEBUGDrawImage(Position, Sprites->Treasure);
   } else if (Value == LVL_BLANK || LVL_BLANK_TMP || Value == LVL_PLAYER ||
              Value == LVL_ENEMY || Value == LVL_WIN_LADDER) {
-    DEBUGDrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
+    DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
 }
 
@@ -372,13 +278,13 @@ internal void DrawPlayer(player *Player) {
 
   // Debug
   if (gDrawDebug) {
-    v2 TilePosition = {};
-    TilePosition.x = (r32)Player->TileX * kTileWidth;
-    TilePosition.y = (r32)Player->TileY * kTileWidth;
-    DEBUGDrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
+    v2i TilePosition = {};
+    TilePosition.x = Player->TileX * kTileWidth;
+    TilePosition.y = Player->TileY * kTileWidth;
+    DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
   }
 
-  v2 Position = {};
+  v2i Position = {};
   Position.x = Player->Position.x - Player->Width / 2;
   Position.y = Player->Position.y - Player->Height / 2;
 
@@ -606,8 +512,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Value = LVL_PLAYER;
           Player->TileX = Column;
           Player->TileY = Row;
-          Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
-          Player->Y = (r32)(Player->TileY * kTileHeight + kTileHeight / 2);
+          Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
+          Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
           PlayerSet = true;
         }
 
@@ -624,8 +530,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     // Draw level
-    DEBUGDrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
-                       0x000A0D0B);
+    DrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
+                  0x000A0D0B);
 
     for (int Row = 0; Row < Level->Height; ++Row) {
       for (int Col = 0; Col < Level->Width; ++Col) {
@@ -648,7 +554,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       gDrawDebug = !gDrawDebug;
     }
 
-    r32 Speed = 4.0f;
+    int Speed = 4;
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
@@ -687,14 +593,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
                (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
       // Adjust player on a rope
       if (OnRope) {
-        Player->Y = (r32)(RopeY + Player->Height / 2);
+        Player->Y = RopeY + Player->Height / 2;
       }
     }
 
     // Gravity
     bool32 IsFalling = false;
     {
-      r32 Old = Player->Y;
+      int Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo ||
           OnRope) {
@@ -707,7 +613,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // Update based on movement keys
     if (PressedRight && (!IsFalling || Turbo)) {
-      r32 Old = Player->X;
+      int Old = Player->X;
       Player->X += Speed;
       if (!AcceptableMove(Player)) {
         Player->X = Old;
@@ -723,7 +629,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     if (PressedLeft && (!IsFalling || Turbo)) {
-      r32 Old = Player->X;
+      int Old = Player->X;
       Player->X -= Speed;
       if (!AcceptableMove(Player)) {
         Player->X = Old;
@@ -740,7 +646,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Climbing = false;
     if (PressedUp && (CanClimb || Turbo)) {
-      r32 Old = Player->Y;
+      int Old = Player->Y;
       Player->Y -= Speed;
 
       // @refactor?
@@ -763,7 +669,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Descending = false;
     if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
-      r32 Old = Player->Y;
+      int Old = Player->Y;
       Player->Y += Speed;
       if (!AcceptableMove(Player)) {
         Player->Y = Old;
@@ -781,7 +687,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // Adjust player on ladder
     if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
-      Player->X = (r32)(Player->TileX * kTileWidth + kTileWidth / 2);
+      Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
     }
 
     Animate = Animate && !(PressedDown && PressedUp) &&
@@ -874,7 +780,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   for (int i = 0; i < kCrushedBrickCount; i++) {
     crushed_brick *Brick = &CrushedBricks[i];
     if (Brick->IsUsed) {
-
       // @copypaste
       animation *Animation = &Brick->Breaking;
       frame *Frame = &Animation->Frames[Animation->Frame];
@@ -896,9 +801,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Brick->Sprite.YOffset = Frame->YOffset;
       }
 
-      v2 Position = {};
-      Position.x = (r32)Brick->TileX * kTileWidth;
-      Position.y = (r32)(Brick->TileY - 1) * kTileHeight;
+      v2i Position = {};
+      Position.x = Brick->TileX * kTileWidth;
+      Position.y = (Brick->TileY - 1) * kTileHeight;
       DrawSprite(Position, Brick->Sprite);
 
       Animation->Counter += 1;
