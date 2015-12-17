@@ -110,11 +110,6 @@ int main(int argc, char const *argv[]) {
 
   usleep(5000);  // 50 ms
 
-
-  // TODO:
-  // - init input
-  // - call update and render
-
   // Init game memory
   {
     GameMemory.MemorySize = 1024 * 1024 * 1024;  // 1 Gigabyte
@@ -156,7 +151,8 @@ int main(int argc, char const *argv[]) {
 
     // TODO: find a way to do it with a newly created image
     usleep(500000);
-    gXImage = XGetImage(display, window, 0, 0, kWindowWidth, kWindowHeight, AllPlanes, ZPixmap);
+    gXImage = XGetImage(display, window, 0, 0, kWindowWidth, kWindowHeight,
+                        AllPlanes, ZPixmap);
 
     GameBackBuffer.Memory = (void *)gXImage->data;
 
@@ -180,18 +176,14 @@ int main(int argc, char const *argv[]) {
   GlobalRunning = true;
 
   while (GlobalRunning) {
-
     // Process events
-    while (XPending(display))
-    {
+    while (XPending(display)) {
       XNextEvent(display, &event);
 
       // Process user input
       if (event.type == KeyPress) {
-
         if (XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
           char symbol = buf[0];
-
         }
         if (key == XK_Escape) {
           GlobalRunning = false;
@@ -199,16 +191,6 @@ int main(int argc, char const *argv[]) {
           printf("left!\n");
         }
       }
-
-
-
-
-      // TODO: figure out a way to distinguish
-      // key repeats, then implement input
-
-
-
-
 
       // Close window message
       if (event.type == ClientMessage) {
@@ -227,26 +209,22 @@ int main(int argc, char const *argv[]) {
     *NewInput = {};  // zero everything
 
     // Retain the EndedDown state
-    for (int PlayerNum = 0; PlayerNum < COUNT_OF(NewInput->Players);
-         PlayerNum++) {
-      player_input *OldPlayerInput = &OldInput->Players[PlayerNum];
-      player_input *NewPlayerInput = &NewInput->Players[PlayerNum];
-      for (int ButtonNum = 0; ButtonNum < COUNT_OF(OldPlayerInput->Buttons);
-           ButtonNum++) {
-        NewPlayerInput->Buttons[ButtonNum].EndedDown =
-            OldPlayerInput->Buttons[ButtonNum].EndedDown;
+    for (int p = 0; p < COUNT_OF(NewInput->Players); p++) {
+      player_input *OldPlayerInput = &OldInput->Players[p];
+      player_input *NewPlayerInput = &NewInput->Players[p];
+      for (int b = 0; b < COUNT_OF(OldPlayerInput->Buttons); b++) {
+        NewPlayerInput->Buttons[b].EndedDown =
+            OldPlayerInput->Buttons[b].EndedDown;
       }
     }
 
-    // XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth, kWindowHeight);
-
+    // XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth,
+    //           kWindowHeight);
 
     // TODO: limit FPS
-
   }
 
   XCloseDisplay(display);
 
   return 0;
 }
-
