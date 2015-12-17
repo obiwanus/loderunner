@@ -853,12 +853,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         animation *Animation;
 
         Animation = &Brick->Breaking;
-        Animation->FrameCount = 2;
+        Animation->FrameCount = 3;
         if (BreakingFrames == NULL) {
           BreakingFrames =
               (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-          BreakingFrames[0] = {96, 32, 10};
-          BreakingFrames[1] = {128, 32, 20};
+          BreakingFrames[0] = {96, 32, 2};
+          BreakingFrames[1] = {128, 32, 2};
+          BreakingFrames[2] = {160, 32, 2};
         }
         Animation->Frames = BreakingFrames;
       }
@@ -905,20 +906,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       animation *Animation = &Brick->Breaking;
       frame *Frame = &Animation->Frames[Animation->Frame];
 
-      // Don't show more frames than there is
-      if (Animation->Frame == Animation->FrameCount) {
-        continue;
-      }
-
       if (Brick->AnimationCounter > Frame->Lasting) {
         Brick->AnimationCounter = 0;
+        Animation->Frame++;
+        Frame = &Animation->Frames[Animation->Frame];
+      }
+
+      // Don't show more frames than there is
+      if (Animation->Frame == Animation->FrameCount) {
+        Brick->IsUsed = false;
+        continue;
       }
 
       if (Brick->AnimationCounter == 0) {
         Brick->Sprite.XOffset = Frame->XOffset;
         Brick->Sprite.YOffset = Frame->YOffset;
-
-        Animation->Frame++;
       }
 
       v2 Position = {};
