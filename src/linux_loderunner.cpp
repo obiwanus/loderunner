@@ -181,22 +181,41 @@ int main(int argc, char const *argv[]) {
 
   while (GlobalRunning) {
 
+    // Process events
     while (XPending(display))
     {
       XNextEvent(display, &event);
-      if (event.type == KeyPress &&
-          XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
-        char symbol = buf[0];
-        if (symbol == 'q') {
+
+      // Process user input
+      if (event.type == KeyPress) {
+
+        if (XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
+          char symbol = buf[0];
+
+        }
+        if (key == XK_Escape) {
           GlobalRunning = false;
+        } else if (key == XK_Left) {
+          printf("left!\n");
         }
       }
+
+
+
+
+      // TODO: figure out a way to distinguish
+      // key repeats, then implement input
+
+
+
+
+
+      // Close window message
       if (event.type == ClientMessage) {
         if (event.xclient.data.l[0] == wmDeleteMessage) {
           GlobalRunning = false;
         }
       }
-      // TODO: collect input
     }
 
     Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory);
@@ -219,7 +238,7 @@ int main(int argc, char const *argv[]) {
       }
     }
 
-    XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth, kWindowHeight);
+    // XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth, kWindowHeight);
 
 
     // TODO: limit FPS
