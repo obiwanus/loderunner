@@ -288,7 +288,15 @@ internal void DrawPlayer(player *Player) {
   Position.x = Player->Position.x - Player->Width / 2;
   Position.y = Player->Position.y - Player->Height / 2;
 
-  DrawSprite(Position, Player->Sprite);
+  frame *Frame = &Player->Animation->Frames[Player->Animation->Frame];
+  sprite Sprite = {};
+  Sprite.Image = Sprites->Sprites;
+  Sprite.XOffset = Frame->XOffset;
+  Sprite.YOffset = Frame->YOffset;
+  Sprite.Width = Player->Width;
+  Sprite.Height = Player->Height;
+
+  DrawSprite(Position, Sprite);
 }
 
 internal bmp_file DEBUGReadBMPFile(char const *Filename) {
@@ -387,12 +395,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Sprites->Sprites = LoadSprite("img/sprites.bmp");
 
     // TODO: do something about it
-    Sprites->Falling.Image = Sprites->Sprites;
-    Sprites->Falling.XOffset = 72;
-    Sprites->Falling.YOffset = 0;
-    Sprites->Falling.Width = kHumanWidth;
-    Sprites->Falling.Height = kHumanHeight;
-
     Sprites->Breaking.Image = Sprites->Sprites;
     Sprites->Breaking.XOffset = 0;
     Sprites->Breaking.YOffset = 0;
@@ -400,61 +402,66 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Sprites->Breaking.Height = kTileHeight * 2;
   }
 
+  // Init animations
+  {
+    frame *Frames = NULL;
+    animation *Animation = NULL;
+
+    // Falling
+    Animation = &Player->Falling;
+    Animation->FrameCount = 1;
+    Animation->Frames[0] = {72, 0, 0};
+
+    // NOTE:
+    // - Enemies: 6, 3, 3, speed = 2
+    // - Player: 3, 1, 1, speed = 4
+
+    // Going right
+    Animation = &Player->GoingRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 0, 3};
+    Animation->Frames[1] = {24, 0, 1};
+    Animation->Frames[2] = {48, 0, 1};
+
+    // Going left
+    Animation = &Player->GoingLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 32, 3};
+    Animation->Frames[1] = {24, 32, 1};
+    Animation->Frames[2] = {48, 32, 1};
+
+    // NOTE:
+    // - Enemies: 4, 4, 6, speed = 2
+    // - Player: 2, 2, 3, speed = 4
+
+    // On rope right
+    Animation = &Player->RopeRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 64, 2};
+    Animation->Frames[1] = {24, 64, 2};
+    Animation->Frames[2] = {48, 64, 3};
+
+    // On rope right
+    Animation = &Player->RopeLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 96, 2};
+    Animation->Frames[1] = {24, 96, 2};
+    Animation->Frames[2] = {48, 96, 3};
+
+    // On ladder
+    Animation = &Player->Climbing;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {0, 128, 2};
+    Animation->Frames[1] = {24, 128, 2};
+  }
+
   // Init player
   if (!Player->Width) {
-    Player->Sprite = Sprites->Falling;
-    Player->Width = Player->Sprite.Width;
-    Player->Height = Player->Sprite.Height;
+    Player->Width = kHumanWidth;
+    Player->Height = kHumanHeight;
     Player->Animation = NULL;
     Player->Facing = RIGHT;
 
-    // Init animations
-    {
-      frame *Frames = NULL;
-      animation *Animation = NULL;
-
-      // NOTE:
-      // - Enemies: 6, 3, 3, speed = 2
-      // - Player: 3, 1, 1, speed = 4
-
-      // Going right
-      Animation = &Player->GoingRight;
-      Animation->FrameCount = 3;
-      Animation->Frames[0] = {0, 0, 3};
-      Animation->Frames[1] = {24, 0, 1};
-      Animation->Frames[2] = {48, 0, 1};
-
-      // Going left
-      Animation = &Player->GoingLeft;
-      Animation->FrameCount = 3;
-      Animation->Frames[0] = {0, 32, 3};
-      Animation->Frames[1] = {24, 32, 1};
-      Animation->Frames[2] = {48, 32, 1};
-
-      // NOTE:
-      // - Enemies: 4, 4, 6, speed = 2
-      // - Player: 2, 2, 3, speed = 4
-
-      // On rope right
-      Animation = &Player->RopeRight;
-      Animation->FrameCount = 3;
-      Animation->Frames[0] = {0, 64, 2};
-      Animation->Frames[1] = {24, 64, 2};
-      Animation->Frames[2] = {48, 64, 3};
-
-      // On rope right
-      Animation = &Player->RopeLeft;
-      Animation->FrameCount = 3;
-      Animation->Frames[0] = {0, 96, 2};
-      Animation->Frames[1] = {24, 96, 2};
-      Animation->Frames[2] = {48, 96, 3};
-
-      // On ladder
-      Animation = &Player->Climbing;
-      Animation->FrameCount = 2;
-      Animation->Frames[0] = {0, 128, 2};
-      Animation->Frames[1] = {24, 128, 2};
-    }
   }
 
   // Init level
@@ -608,6 +615,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         IsFalling = false;
       } else {
         IsFalling = true;
+        Player->Animation = &Player->Falling;
       }
     }
 
@@ -680,11 +688,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
-    if (IsFalling) {
-      Player->Sprite = Sprites->Falling;
-      Animate = false;
-    }
-
     // Adjust player on ladder
     if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
       Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
@@ -754,27 +757,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (Player->FireCooldown > 0) Player->FireCooldown--;
   }
 
-  if (Animate && !Turbo && Player->Animation != NULL) {
+  Assert(Player->Animation != NULL);
+
+  if (Animate && !Turbo) {
     animation *Animation = Player->Animation;
     frame *Frame = &Animation->Frames[Animation->Frame];
 
     if (Animation->Counter > Frame->Lasting) {
       Animation->Counter = 0;
-    }
-
-    if (Animation->Counter == 0) {
-      Player->Sprite.XOffset = Frame->XOffset;
-      Player->Sprite.YOffset = Frame->YOffset;
-
-      DrawPlayer(Player);
-
       Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
     }
-
     Animation->Counter += 1;
-  } else {
-    DrawPlayer(Player);
   }
+
+  DrawPlayer(Player);
 
   // Animate bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {

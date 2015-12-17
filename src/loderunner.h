@@ -150,8 +150,6 @@ struct player {
   int Facing;
   int FireCooldown;
 
-  sprite Sprite;
-
   // Animation
   animation *Animation;
   animation GoingLeft;
@@ -159,6 +157,7 @@ struct player {
   animation Climbing;
   animation RopeLeft;
   animation RopeRight;
+  animation Falling;
 };
 
 struct crushed_brick {
