@@ -122,9 +122,12 @@ struct frame {
 };
 
 struct animation {
-  int FrameCount;
-  int Frame;  // Current frame
-  frame *Frames;
+  int Counter = 0;
+  int FrameCount = 0;
+  int Frame = 0;  // Current frame
+
+  // We assume we're not going to need more
+  frame Frames[5];
 };
 
 enum {
@@ -150,7 +153,6 @@ struct player {
   sprite Sprite;
 
   // Animation
-  int AnimationCounter = 0;
   animation *Animation;
   animation GoingLeft;
   animation GoingRight;
@@ -170,7 +172,6 @@ struct crushed_brick {
 
   sprite Sprite;
 
-  int AnimationCounter = 0;
   animation Breaking;
   animation Restoring;
 };

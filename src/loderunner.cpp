@@ -18,8 +18,6 @@ global int kHumanHeight = 32;
 global const int kCrushedBrickCount = 30;
 global crushed_brick CrushedBricks[kCrushedBrickCount];
 global int NextBrickAvailable = 0;
-global frame *BreakingFrames = NULL;
-global frame *RestoringFrames = NULL;
 
 inline int TruncateReal32(r32 Value) {
   int Result = (int)Value;
@@ -516,20 +514,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       // Going right
       Animation = &Player->GoingRight;
       Animation->FrameCount = 3;
-      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {0, 0, 3};
-      Frames[1] = {24, 0, 1};
-      Frames[2] = {48, 0, 1};
-      Animation->Frames = Frames;
+      Animation->Frames[0] = {0, 0, 3};
+      Animation->Frames[1] = {24, 0, 1};
+      Animation->Frames[2] = {48, 0, 1};
 
       // Going left
       Animation = &Player->GoingLeft;
       Animation->FrameCount = 3;
-      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {0, 32, 3};
-      Frames[1] = {24, 32, 1};
-      Frames[2] = {48, 32, 1};
-      Animation->Frames = Frames;
+      Animation->Frames[0] = {0, 32, 3};
+      Animation->Frames[1] = {24, 32, 1};
+      Animation->Frames[2] = {48, 32, 1};
 
       // NOTE:
       // - Enemies: 4, 4, 6, speed = 2
@@ -538,28 +532,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       // On rope right
       Animation = &Player->RopeRight;
       Animation->FrameCount = 3;
-      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {0, 64, 2};
-      Frames[1] = {24, 64, 2};
-      Frames[2] = {48, 64, 3};
-      Animation->Frames = Frames;
+      Animation->Frames[0] = {0, 64, 2};
+      Animation->Frames[1] = {24, 64, 2};
+      Animation->Frames[2] = {48, 64, 3};
 
       // On rope right
       Animation = &Player->RopeLeft;
       Animation->FrameCount = 3;
-      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {0, 96, 2};
-      Frames[1] = {24, 96, 2};
-      Frames[2] = {48, 96, 3};
-      Animation->Frames = Frames;
+      Animation->Frames[0] = {0, 96, 2};
+      Animation->Frames[1] = {24, 96, 2};
+      Animation->Frames[2] = {48, 96, 3};
 
       // On ladder
       Animation = &Player->Climbing;
       Animation->FrameCount = 2;
-      Frames = (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-      Frames[0] = {0, 128, 2};
-      Frames[1] = {24, 128, 2};
-      Animation->Frames = Frames;
+      Animation->Frames[0] = {0, 128, 2};
+      Animation->Frames[1] = {24, 128, 2};
     }
   }
 
@@ -849,19 +837,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Brick->Height = 64;
         Brick->Sprite = Sprites->Breaking;
 
-        // Init animations
-        animation *Animation;
-
-        Animation = &Brick->Breaking;
+        // Init animation
+        animation *Animation = &Brick->Breaking;
         Animation->FrameCount = 3;
-        if (BreakingFrames == NULL) {
-          BreakingFrames =
-              (frame *)GameMemoryAlloc(sizeof(frame) * Animation->FrameCount);
-          BreakingFrames[0] = {96, 32, 2};
-          BreakingFrames[1] = {128, 32, 2};
-          BreakingFrames[2] = {160, 32, 2};
-        }
-        Animation->Frames = BreakingFrames;
+        Animation->Frames[0] = {96, 32, 2};
+        Animation->Frames[1] = {128, 32, 2};
+        Animation->Frames[2] = {160, 32, 2};
       }
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
@@ -871,11 +852,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     animation *Animation = Player->Animation;
     frame *Frame = &Animation->Frames[Animation->Frame];
 
-    if (Player->AnimationCounter > Frame->Lasting) {
-      Player->AnimationCounter = 0;
+    if (Animation->Counter > Frame->Lasting) {
+      Animation->Counter = 0;
     }
 
-    if (Player->AnimationCounter == 0) {
+    if (Animation->Counter == 0) {
       Player->Sprite.XOffset = Frame->XOffset;
       Player->Sprite.YOffset = Frame->YOffset;
 
@@ -884,18 +865,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
     }
 
-    Player->AnimationCounter += 1;
+    Animation->Counter += 1;
   } else {
     DrawPlayer(Player);
   }
-
-
-
-  // TODO:
-  // - Fix the animation of bricks
-  // - Rewrite the animation system
-
-
 
   // Animate bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
@@ -906,8 +879,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       animation *Animation = &Brick->Breaking;
       frame *Frame = &Animation->Frames[Animation->Frame];
 
-      if (Brick->AnimationCounter > Frame->Lasting) {
-        Brick->AnimationCounter = 0;
+      if (Animation->Counter > Frame->Lasting) {
+        Animation->Counter = 0;
         Animation->Frame++;
         Frame = &Animation->Frames[Animation->Frame];
       }
@@ -918,7 +891,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         continue;
       }
 
-      if (Brick->AnimationCounter == 0) {
+      if (Animation->Counter == 0) {
         Brick->Sprite.XOffset = Frame->XOffset;
         Brick->Sprite.YOffset = Frame->YOffset;
       }
@@ -928,7 +901,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Position.y = (r32)(Brick->TileY - 1) * kTileHeight;
       DrawSprite(Position, Brick->Sprite);
 
-      Brick->AnimationCounter += 1;
+      Animation->Counter += 1;
     }
   }
 }
