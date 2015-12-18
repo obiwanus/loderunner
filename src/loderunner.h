@@ -169,8 +169,6 @@ struct crushed_brick {
 
   int TimeToLive = 8;  // seconds
 
-  sprite Sprite;
-
   animation Breaking;
   animation Restoring;
 };

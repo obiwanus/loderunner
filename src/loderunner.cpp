@@ -6,7 +6,7 @@ global game_memory *GameMemory;
 
 global player gPlayer;
 global level *Level;
-global sprites *Sprites;
+global bmp_file *gImage;
 
 global bool32 gDrawDebug = false;
 
@@ -74,17 +74,23 @@ inline void SetPixel(int X, int Y, u32 Color) {
   *Pixel = Color;
 }
 
-internal void DEBUGDrawImage(v2i Position, bmp_file *Image) {
-  int Width = Image->Width;
-  int Height = Image->Height;
+internal void DrawSprite(v2i Position, int Width, int Height, int XOffset, int YOffset) {
+  // NOTE: if we need a draw image function, it's easily derived from this one
+
+  // If we ever need another image, we'll need a new func
+  bmp_file *Image = gImage;
+
   int X = (int)Position.x;
   int Y = (int)Position.y;
 
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
+  int SrcPitch = gImage->Width;
+
   u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
             X * GameBackBuffer->BytesPerPixel;
-  u32 *SrcRow =
-      (u32 *)Image->Bitmap + Height * Width - Width;  // bottom row first
+  u32 *BottomLeftCorner = (u32 *)Image->Bitmap +
+                          Image->Width * (Image->Height - 1);
+  u32 *SrcRow = BottomLeftCorner - SrcPitch * YOffset + XOffset;
 
   for (int pY = Y; pY < Y + Height; pY++) {
     int *Pixel = (int *)Row;
@@ -96,68 +102,6 @@ internal void DEBUGDrawImage(v2i Position, bmp_file *Image) {
       u8 Green = UnmaskColor(*SrcPixel, Image->GreenMask);
       u8 Blue = UnmaskColor(*SrcPixel, Image->BlueMask);
       u8 Alpha = UnmaskColor(*SrcPixel, Image->AlphaMask);
-
-      u32 ResultingColor = Red << 16 | Green << 8 | Blue;
-
-      if (Alpha > 0 && Alpha < 0xFF) {
-        r32 ExistingRed = (r32)((*Pixel >> 16) & 0xFF);
-        r32 ExistingGreen = (r32)((*Pixel >> 8) & 0xFF);
-        r32 ExistingBlue = (r32)((*Pixel >> 0) & 0xFF);
-
-        r32 NewRed = (r32)((ResultingColor >> 16) & 0xFF);
-        r32 NewGreen = (r32)((ResultingColor >> 8) & 0xFF);
-        r32 NewBlue = (r32)((ResultingColor >> 0) & 0xFF);
-
-        // Blending
-        r32 t = (r32)Alpha / 255.0f;
-
-        NewRed = NewRed * t + ExistingRed * (1 - t);
-        NewGreen = NewGreen * t + ExistingGreen * (1 - t);
-        NewBlue = NewBlue * t + ExistingBlue * (1 - t);
-
-        *Pixel =
-            (((u8)NewRed << 16) | ((u8)NewGreen << 8) | ((u8)NewBlue << 0));
-      } else if (Alpha == 0xFF) {
-        *Pixel = ResultingColor;
-      } else {
-        // do nothing
-      }
-
-      Pixel++;
-      SrcPixel++;
-    }
-    Row += Pitch;
-    SrcRow -= Width;
-  }
-}
-
-internal void DrawSprite(v2i Position, sprite Sprite) {
-  // @copypaste - possibly can me merged with DEBUGDrawImage
-
-  int Width = Sprite.Width;
-  int Height = Sprite.Height;
-  int X = (int)Position.x;
-  int Y = (int)Position.y;
-
-  int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
-  int SrcPitch = Sprite.Image->Width;
-
-  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
-            X * GameBackBuffer->BytesPerPixel;
-  u32 *BottomLeftCorner = (u32 *)Sprite.Image->Bitmap +
-                          Sprite.Image->Width * (Sprite.Image->Height - 1);
-  u32 *SrcRow = BottomLeftCorner - SrcPitch * Sprite.YOffset + Sprite.XOffset;
-
-  for (int pY = Y; pY < Y + Height; pY++) {
-    int *Pixel = (int *)Row;
-    int *SrcPixel = (int *)SrcRow;
-
-    for (int pX = X; pX < X + Width; pX++) {
-      // TODO: bmp may not be masked
-      u8 Red = UnmaskColor(*SrcPixel, Sprite.Image->RedMask);
-      u8 Green = UnmaskColor(*SrcPixel, Sprite.Image->GreenMask);
-      u8 Blue = UnmaskColor(*SrcPixel, Sprite.Image->BlueMask);
-      u8 Alpha = UnmaskColor(*SrcPixel, Sprite.Image->AlphaMask);
 
       u32 ResultingColor = Red << 16 | Green << 8 | Blue;
 
@@ -210,13 +154,15 @@ void DrawTile(int Col, int Row) {
   Position.y = (Row * kTileHeight);
   int Value = CheckTile(Col, Row);
   if (Value == LVL_BRICK) {
-    DEBUGDrawImage(Position, Sprites->Brick);
+    DrawSprite(Position, kTileWidth, kTileHeight, 160, 128);
+  } else if (Value == LVL_BRICK_HARD) {
+    DrawSprite(Position, kTileWidth, kTileHeight, 160, 96);
   } else if (Value == LVL_LADDER) {
-    DEBUGDrawImage(Position, Sprites->Ladder);
+    DrawSprite(Position, kTileWidth, kTileHeight, 96, 128);
   } else if (Value == LVL_ROPE) {
-    DEBUGDrawImage(Position, Sprites->Rope);
+    DrawSprite(Position, kTileWidth, kTileHeight, 128, 96);
   } else if (Value == LVL_TREASURE) {
-    DEBUGDrawImage(Position, Sprites->Treasure);
+    DrawSprite(Position, kTileWidth, kTileHeight, 96, 96);
   } else if (Value == LVL_BLANK || LVL_BLANK_TMP || Value == LVL_PLAYER ||
              Value == LVL_ENEMY || Value == LVL_WIN_LADDER) {
     DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
@@ -288,14 +234,7 @@ internal void DrawPlayer(player *Player) {
   Position.y = Player->Position.y - Player->Height / 2;
 
   frame *Frame = &Player->Animation->Frames[Player->Animation->Frame];
-  sprite Sprite = {};
-  Sprite.Image = Sprites->Sprites;
-  Sprite.XOffset = Frame->XOffset;
-  Sprite.YOffset = Frame->YOffset;
-  Sprite.Width = Player->Width;
-  Sprite.Height = Player->Height;
-
-  DrawSprite(Position, Sprite);
+  DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset, Frame->YOffset);
 }
 
 internal bmp_file DEBUGReadBMPFile(char const *Filename) {
@@ -382,23 +321,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   bool32 Turbo = false;
 
   // Load sprites
-  if (!Sprites) {
-    // @rewrite: put all environment in the sprites
-
-    Sprites = (sprites *)GameMemoryAlloc(sizeof(sprites));
-    Sprites->Brick = LoadSprite("img/brick.bmp");
-    Sprites->BrickHard = LoadSprite("img/brick-hard.bmp");
-    Sprites->Ladder = LoadSprite("img/ladder.bmp");
-    Sprites->Rope = LoadSprite("img/rope.bmp");
-    Sprites->Treasure = LoadSprite("img/treasure.bmp");
-    Sprites->Sprites = LoadSprite("img/sprites.bmp");
-
-    // TODO: do something about it
-    Sprites->Breaking.Image = Sprites->Sprites;
-    Sprites->Breaking.XOffset = 0;
-    Sprites->Breaking.YOffset = 0;
-    Sprites->Breaking.Width = kTileWidth;
-    Sprites->Breaking.Height = kTileHeight * 2;
+  if (gImage == NULL) {
+    gImage = LoadSprite("img/sprites.bmp");
   }
 
   // Init animations
@@ -741,7 +665,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Brick->TileY = TileY;
         Brick->Width = 32;
         Brick->Height = 64;
-        Brick->Sprite = Sprites->Breaking;
 
         // Init animation
         animation *Animation = &Brick->Breaking;
@@ -777,10 +700,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       animation *Animation = &Brick->Breaking;
       frame *Frame = &Animation->Frames[Animation->Frame];
 
+      v2i Position = {};
+      Position.x = Brick->TileX * kTileWidth;
+      Position.y = (Brick->TileY - 1) * kTileHeight;
+      DrawSprite(Position, kTileWidth, kTileHeight * 2, Frame->XOffset, Frame->YOffset);
+
       if (Animation->Counter > Frame->Lasting) {
         Animation->Counter = 0;
         Animation->Frame++;
-        Frame = &Animation->Frames[Animation->Frame];
       }
 
       // Don't show more frames than there is
@@ -788,16 +715,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Brick->IsUsed = false;
         continue;
       }
-
-      if (Animation->Counter == 0) {
-        Brick->Sprite.XOffset = Frame->XOffset;
-        Brick->Sprite.YOffset = Frame->YOffset;
-      }
-
-      v2i Position = {};
-      Position.x = Brick->TileX * kTileWidth;
-      Position.y = (Brick->TileY - 1) * kTileHeight;
-      DrawSprite(Position, Brick->Sprite);
 
       Animation->Counter += 1;
     }
