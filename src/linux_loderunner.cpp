@@ -70,13 +70,13 @@ int main(int argc, char const *argv[]) {
       }
     }
   }
-  Assert(Game.IsValid);
+  if (!Game.IsValid) {
+    printf("Could not load game code\n");
+    exit(1);
+  }
 
   Display *display;
   Window window;
-  XEvent event;
-  KeySym key;
-  char buf[256];
   int screen;
 
   display = XOpenDisplay(0);
@@ -105,8 +105,6 @@ int main(int argc, char const *argv[]) {
 
   Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(display, window, &wmDeleteMessage, 1);
-
-  // XSync(display, True);
 
   usleep(5000);  // 50 ms
 
@@ -178,17 +176,52 @@ int main(int argc, char const *argv[]) {
   while (GlobalRunning) {
     // Process events
     while (XPending(display)) {
+      XEvent event;
+      KeySym key;
+      char buf[256];
+      player_input *Player1 = &NewInput->Player1;
+      player_input *Player2 = &NewInput->Player2;
+      char symbol = 0;
+      bool32 pressed = false;
+      bool32 released = false;
+
       XNextEvent(display, &event);
 
       // Process user input
       if (event.type == KeyPress) {
         if (XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
-          char symbol = buf[0];
+          symbol = buf[0];
         }
+        pressed = true;
+      }
+      if (event.type == KeyRelease &&
+          XEventsQueued(display, QueuedAfterReading)) {
+        XEvent nev;
+        XPeekEvent(display, &nev);
+
+        if (nev.type == KeyPress && nev.xkey.time == event.xkey.time &&
+            nev.xkey.keycode == event.xkey.keycode) {
+          // Ignore. Key wasn't actually released
+        } else {
+          released = true;
+        }
+      }
+
+      if (pressed || released) {
         if (key == XK_Escape) {
           GlobalRunning = false;
         } else if (key == XK_Left) {
-          printf("left!\n");
+          Player2->Left.EndedDown = pressed;
+        } else if (key == XK_Right) {
+          Player2->Right.EndedDown = pressed;
+        } else if (key == XK_Up) {
+          Player2->Up.EndedDown = pressed;
+        } else if (key == XK_Down) {
+          Player2->Down.EndedDown = pressed;
+        } else if (key == XK_space) {
+          Player2->Fire.EndedDown = pressed;
+        } else if (symbol == 'x') {
+          Player2->Turbo.EndedDown = pressed;
         }
       }
 
@@ -218,8 +251,8 @@ int main(int argc, char const *argv[]) {
       }
     }
 
-    // XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth,
-    //           kWindowHeight);
+    XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth,
+              kWindowHeight);
 
     // TODO: limit FPS
   }
