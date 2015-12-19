@@ -4,7 +4,7 @@
 global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
-global player gPlayer;
+global player gPlayers[2];
 global level *Level;
 global bmp_file *gImage;
 
@@ -249,17 +249,26 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
   GameMemory = Memory;
-  player *Player = &gPlayer;
-  bool32 Animate = false;
-  bool32 Turbo = false;
 
   // Load sprites
   if (gImage == NULL) {
     gImage = LoadSprite("img/sprites.bmp");
   }
 
-  // Init animations
-  {
+  // Init players
+  for (int p = 0; p < 2; p++) {
+
+    player *Player = &gPlayers[p];
+    if (Player->Width) {
+      continue;
+    }
+
+    Player->Width = kHumanWidth;
+    Player->Height = kHumanHeight;
+    Player->Animation = NULL;
+    Player->Facing = RIGHT;
+
+    // Init animations
     frame *Frames = NULL;
     animation *Animation = NULL;
 
@@ -275,48 +284,40 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Going right
     Animation = &Player->GoingRight;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 0, 6};
-    Animation->Frames[1] = {24, 0, 4};
-    Animation->Frames[2] = {48, 0, 6};
+    Animation->Frames[0] = {0, 0, 3};
+    Animation->Frames[1] = {24, 0, 2};
+    Animation->Frames[2] = {48, 0, 3};
 
     // Going left
     Animation = &Player->GoingLeft;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 32, 6};
-    Animation->Frames[1] = {24, 32, 4};
-    Animation->Frames[2] = {48, 32, 6};
+    Animation->Frames[0] = {0, 32, 3};
+    Animation->Frames[1] = {24, 32, 2};
+    Animation->Frames[2] = {48, 32, 3};
 
     // NOTE:
-    // - Enemies: 4, 4, 6, speed = 2
-    // - Player: 2, 2, 3, speed = 4
+    // - Enemies: 6, 4, 6, speed = 2
+    // - Player: 3, 2, 3, speed = 4
 
     // On rope right
     Animation = &Player->RopeRight;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 64, 6};
-    Animation->Frames[1] = {24, 64, 4};
-    Animation->Frames[2] = {48, 64, 6};
+    Animation->Frames[0] = {0, 64, 3};
+    Animation->Frames[1] = {24, 64, 2};
+    Animation->Frames[2] = {48, 64, 3};
 
     // On rope left
     Animation = &Player->RopeLeft;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 96, 6};
-    Animation->Frames[1] = {24, 96, 4};
-    Animation->Frames[2] = {48, 96, 6};
+    Animation->Frames[0] = {0, 96, 3};
+    Animation->Frames[1] = {24, 96, 2};
+    Animation->Frames[2] = {48, 96, 3};
 
     // On ladder
     Animation = &Player->Climbing;
     Animation->FrameCount = 2;
-    Animation->Frames[0] = {0, 128, 8};
-    Animation->Frames[1] = {24, 128, 8};
-  }
-
-  // Init player
-  if (!Player->Width) {
-    Player->Width = kHumanWidth;
-    Player->Height = kHumanHeight;
-    Player->Animation = NULL;
-    Player->Facing = RIGHT;
+    Animation->Frames[0] = {0, 128, 4};
+    Animation->Frames[1] = {24, 128, 4};
   }
 
   // Init level
@@ -356,7 +357,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       for (int i = 0; i < FileReadResult.MemorySize; i++) {
         char Symbol = String[i];
         int Value = LVL_BLANK;
-        bool32 PlayerSet = false;
 
         if (Symbol == '|')
           Value = LVL_WIN_LADDER;
@@ -372,13 +372,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Value = LVL_ROPE;
         else if (Symbol == 'e')
           Value = LVL_ENEMY;
-        else if (Symbol == 'p' && !PlayerSet) {
+        else if (Symbol == 'p') {
           Value = LVL_PLAYER;
+          player *Player = &gPlayers[0];
+          if (Player->IsActive) {
+            Player = &gPlayers[1];
+          }
+          Player->IsActive = true;
           Player->TileX = Column;
           Player->TileY = Row;
           Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
           Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
-          PlayerSet = true;
         }
 
         if (Symbol == '\n') {
@@ -404,9 +408,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
-  // Update player
-  {
-    player_input *Input = &NewInput->Player2;
+
+  // Update players
+  for (int p = 0; p < 2; p++) {
+
+    bool32 Animate = false;
+    bool32 Turbo = false;
+
+    player *Player = &gPlayers[p];
+    if (!Player->IsActive) {
+      continue;
+    }
+
+    // Update player
+    player_input *Input = &NewInput->Players[p];
 
     bool32 PressedUp = Input->Up.EndedDown;
     bool32 PressedDown = Input->Down.EndedDown;
@@ -418,7 +433,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       gDrawDebug = !gDrawDebug;
     }
 
-    int Speed = 2;
+    int Speed = 4;
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
@@ -613,92 +628,46 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
-  }
 
-  Assert(Player->Animation != NULL);
+    Assert(Player->Animation != NULL);
 
-  // Draw player
-  {
-    animation *Animation = Player->Animation;
-    frame *Frame = &Animation->Frames[Animation->Frame];
-
-    if (Animate) {
-      if (Animation->Counter >= Frame->Lasting) {
-        Animation->Counter = 0;
-        Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
-      }
-      Animation->Counter += 1;
-    }
-
-    // Redraw tiles covered by player
+    // Draw player
     {
-      // Redraw in a dumb way
-      for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
-        for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
-          DrawTile(Col, Row);
+      animation *Animation = Player->Animation;
+      frame *Frame = &Animation->Frames[Animation->Frame];
+
+      if (Animate) {
+        if (Animation->Counter >= Frame->Lasting) {
+          Animation->Counter = 0;
+          Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
+        }
+        Animation->Counter += 1;
+      }
+
+      // Redraw tiles covered by player
+      {
+        // Redraw in a dumb way
+        for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
+          for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
+            DrawTile(Col, Row);
+          }
         }
       }
 
-      // int X = Player->DrawAt.x + Player->Width / 2;
-      // int Y = Player->DrawAt.y + Player->Height / 2;
-      // int TileX = X / kTileWidth;
-      // int TileY = Y / kTileHeight;
+      // Debug
+      if (gDrawDebug) {
+        v2i TilePosition = {};
+        TilePosition.x = Player->TileX * kTileWidth;
+        TilePosition.y = Player->TileY * kTileWidth;
+        DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
+      }
 
-      // DrawTile(TileX, TileY);
-      // int LeftBoundary = TileX * kTileWidth;
-      // int RightBoundary = (TileX + 1) * kTileWidth;
-      // int TopBoundary = TileY * kTileHeight;
-      // int BottomBoundary = (TileY + 1) * kTileHeight;
-
-      // // Clear the other tile that might be covered
-      // bool32 LeftTileCovered = (X < LeftBoundary + Player->Width / 2);
-      // bool32 RightTileCovered = (X > RightBoundary - Player->Width / 2);
-      // bool32 TopTileCovered = (Y < TopBoundary + Player->Height / 2);
-      // bool32 BottomTileCovered =
-      //     (Y > BottomBoundary - Player->Height / 2);
-
-      // Assert(!(LeftTileCovered && RightTileCovered));
-      // Assert(!(TopTileCovered && BottomTileCovered));
-
-      // if (LeftTileCovered) {
-      //   DrawTile(TileX - 1, TileY);
-      // }
-      // if (RightTileCovered) {
-      //   DrawTile(TileX + 1, TileY);
-      // }
-      // if (TopTileCovered) {
-      //   DrawTile(TileX, TileY - 1);
-      // }
-      // if (BottomTileCovered) {
-      //   DrawTile(TileX, TileY + 1);
-      // }
-      // if (LeftTileCovered && TopTileCovered) {
-      //   DrawTile(TileX - 1, TileY - 1);
-      // }
-      // if (LeftTileCovered && BottomTileCovered) {
-      //   DrawTile(TileX - 1, TileY + 1);
-      // }
-      // if (RightTileCovered && TopTileCovered) {
-      //   DrawTile(TileX + 1, TileY - 1);
-      // }
-      // if (RightTileCovered && BottomTileCovered) {
-      //   DrawTile(TileX + 1, TileY + 1);
-      // }
+      Frame = &Animation->Frames[Animation->Frame];
+      v2i Position = {Player->X - Player->Width / 2,
+                      Player->Y - Player->Height / 2};
+      DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset,
+                 Frame->YOffset);
     }
-
-    // Debug
-    if (gDrawDebug) {
-      v2i TilePosition = {};
-      TilePosition.x = Player->TileX * kTileWidth;
-      TilePosition.y = Player->TileY * kTileWidth;
-      DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
-    }
-
-    Frame = &Animation->Frames[Animation->Frame];
-    v2i Position = {Player->X - Player->Width / 2,
-                    Player->Y - Player->Height / 2};
-    DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset,
-               Frame->YOffset);
   }
 
   // Animate bricks

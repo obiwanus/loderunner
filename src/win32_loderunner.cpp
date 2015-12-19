@@ -236,27 +236,27 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
 
         // Get input
         if (IsDown != WasDown) {
-          if (VKCode == 'W') {
+          if (VKCode == VK_UP) {
             Win32ProcessKeyboardMessage(&Player1->Up, IsDown);
-          } else if (VKCode == 'S') {
-            Win32ProcessKeyboardMessage(&Player1->Down, IsDown);
-          } else if (VKCode == 'A') {
-            Win32ProcessKeyboardMessage(&Player1->Left, IsDown);
-          } else if (VKCode == 'D') {
-            Win32ProcessKeyboardMessage(&Player1->Right, IsDown);
-          } else if (VKCode == 'E') {
-            Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
-          } else if (VKCode == VK_UP) {
-            Win32ProcessKeyboardMessage(&Player2->Up, IsDown);
           } else if (VKCode == VK_DOWN) {
-            Win32ProcessKeyboardMessage(&Player2->Down, IsDown);
+            Win32ProcessKeyboardMessage(&Player1->Down, IsDown);
           } else if (VKCode == VK_LEFT) {
-            Win32ProcessKeyboardMessage(&Player2->Left, IsDown);
+            Win32ProcessKeyboardMessage(&Player1->Left, IsDown);
           } else if (VKCode == VK_RIGHT) {
-            Win32ProcessKeyboardMessage(&Player2->Right, IsDown);
+            Win32ProcessKeyboardMessage(&Player1->Right, IsDown);
           } else if (VKCode == 'X') {
-            Win32ProcessKeyboardMessage(&Player2->Turbo, IsDown);
+            Win32ProcessKeyboardMessage(&Player1->Turbo, IsDown);
           } else if (VKCode == VK_SPACE) {
+            Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
+          } else if (VKCode == 'W') {
+            Win32ProcessKeyboardMessage(&Player2->Up, IsDown);
+          } else if (VKCode == 'S') {
+            Win32ProcessKeyboardMessage(&Player2->Down, IsDown);
+          } else if (VKCode == 'A') {
+            Win32ProcessKeyboardMessage(&Player2->Left, IsDown);
+          } else if (VKCode == 'D') {
+            Win32ProcessKeyboardMessage(&Player2->Right, IsDown);
+          } else if (VKCode == 'E') {
             Win32ProcessKeyboardMessage(&Player2->Fire, IsDown);
           } else if (VKCode == 'I') {
 #if BUILD_INTERNAL
