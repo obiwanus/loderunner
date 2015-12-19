@@ -158,6 +158,9 @@ struct player {
   animation RopeLeft;
   animation RopeRight;
   animation Falling;
+
+  // Discrete position for drawing
+  v2i DrawAt;
 };
 
 struct crushed_brick {

@@ -74,7 +74,8 @@ inline void SetPixel(int X, int Y, u32 Color) {
   *Pixel = Color;
 }
 
-internal void DrawSprite(v2i Position, int Width, int Height, int XOffset, int YOffset) {
+internal void DrawSprite(v2i Position, int Width, int Height, int XOffset,
+                         int YOffset) {
   // NOTE: if we need a draw image function, it's easily derived from this one
 
   // If we ever need another image, we'll need a new func
@@ -88,8 +89,8 @@ internal void DrawSprite(v2i Position, int Width, int Height, int XOffset, int Y
 
   u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
             X * GameBackBuffer->BytesPerPixel;
-  u32 *BottomLeftCorner = (u32 *)Image->Bitmap +
-                          Image->Width * (Image->Height - 1);
+  u32 *BottomLeftCorner =
+      (u32 *)Image->Bitmap + Image->Width * (Image->Height - 1);
   u32 *SrcRow = BottomLeftCorner - SrcPitch * YOffset + XOffset;
 
   for (int pY = Y; pY < Y + Height; pY++) {
@@ -167,74 +168,6 @@ void DrawTile(int Col, int Row) {
              Value == LVL_ENEMY || Value == LVL_WIN_LADDER) {
     DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
-}
-
-internal void DrawPlayer(player *Player) {
-  // Redraw tiles covered by player
-  {
-    // Redraw in a dumb way
-    for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
-      for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
-        DrawTile(Col, Row);
-      }
-    }
-    // DrawTile(Player->TileX, Player->TileY);
-    // int LeftBoundary = Player->TileX * kTileWidth;
-    // int RightBoundary = (Player->TileX + 1) * kTileWidth;
-    // int TopBoundary = Player->TileY * kTileHeight;
-    // int BottomBoundary = (Player->TileY + 1) * kTileHeight;
-
-    // // Clear the other tile that might be covered
-    // bool32 LeftTileCovered = (Player->X < LeftBoundary + Player->Width / 2);
-    // bool32 RightTileCovered = (Player->X > RightBoundary - Player->Width /
-    // 2);
-    // bool32 TopTileCovered = (Player->Y < TopBoundary + Player->Height / 2);
-    // bool32 BottomTileCovered =
-    //     (Player->Y > BottomBoundary - Player->Height / 2);
-
-    // Assert(!(LeftTileCovered && RightTileCovered));
-    // Assert(!(TopTileCovered && BottomTileCovered));
-
-    // if (LeftTileCovered) {
-    //   DrawTile(Player->TileX - 1, Player->TileY);
-    // }
-    // if (RightTileCovered) {
-    //   DrawTile(Player->TileX + 1, Player->TileY);
-    // }
-    // if (TopTileCovered) {
-    //   DrawTile(Player->TileX, Player->TileY - 1);
-    // }
-    // if (BottomTileCovered) {
-    //   DrawTile(Player->TileX, Player->TileY + 1);
-    // }
-    // if (LeftTileCovered && TopTileCovered) {
-    //   DrawTile(Player->TileX - 1, Player->TileY - 1);
-    // }
-    // if (LeftTileCovered && BottomTileCovered) {
-    //   DrawTile(Player->TileX - 1, Player->TileY + 1);
-    // }
-    // if (RightTileCovered && TopTileCovered) {
-    //   DrawTile(Player->TileX + 1, Player->TileY - 1);
-    // }
-    // if (RightTileCovered && BottomTileCovered) {
-    //   DrawTile(Player->TileX + 1, Player->TileY + 1);
-    // }
-  }
-
-  // Debug
-  if (gDrawDebug) {
-    v2i TilePosition = {};
-    TilePosition.x = Player->TileX * kTileWidth;
-    TilePosition.y = Player->TileY * kTileWidth;
-    DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
-  }
-
-  v2i Position = {};
-  Position.x = Player->Position.x - Player->Width / 2;
-  Position.y = Player->Position.y - Player->Height / 2;
-
-  frame *Frame = &Player->Animation->Frames[Player->Animation->Frame];
-  DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset, Frame->YOffset);
 }
 
 internal bmp_file DEBUGReadBMPFile(char const *Filename) {
@@ -384,7 +317,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Player->Height = kHumanHeight;
     Player->Animation = NULL;
     Player->Facing = RIGHT;
-
   }
 
   // Init level
@@ -444,6 +376,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Player->TileY = Row;
           Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
           Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
+          Player->DrawAt = {Player->X - Player->Width / 2,
+                            Player->Y - Player->Height / 2};
           PlayerSet = true;
         }
 
@@ -538,6 +472,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         IsFalling = false;
       } else {
         IsFalling = true;
+        Animate = true;
         Player->Animation = &Player->Falling;
       }
     }
@@ -679,18 +614,89 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   Assert(Player->Animation != NULL);
 
-  if (Animate && !Turbo) {
+  // Draw player
+  {
     animation *Animation = Player->Animation;
     frame *Frame = &Animation->Frames[Animation->Frame];
 
-    if (Animation->Counter > Frame->Lasting) {
-      Animation->Counter = 0;
-      Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
+    if (Animate) {
+      if (Animation->Counter >= Frame->Lasting) {
+        Animation->Counter = 0;
+        Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
+        Player->DrawAt = {Player->X - Player->Width / 2,
+                          Player->Y - Player->Height / 2};
+      }
+      Animation->Counter += 1;
     }
-    Animation->Counter += 1;
-  }
 
-  DrawPlayer(Player);
+    // Redraw tiles covered by player
+    {
+      // Redraw in a dumb way
+      for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
+        for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
+          DrawTile(Col, Row);
+        }
+      }
+
+      // int X = Player->DrawAt.x + Player->Width / 2;
+      // int Y = Player->DrawAt.y + Player->Height / 2;
+      // int TileX = X / kTileWidth;
+      // int TileY = Y / kTileHeight;
+
+      // DrawTile(TileX, TileY);
+      // int LeftBoundary = TileX * kTileWidth;
+      // int RightBoundary = (TileX + 1) * kTileWidth;
+      // int TopBoundary = TileY * kTileHeight;
+      // int BottomBoundary = (TileY + 1) * kTileHeight;
+
+      // // Clear the other tile that might be covered
+      // bool32 LeftTileCovered = (X < LeftBoundary + Player->Width / 2);
+      // bool32 RightTileCovered = (X > RightBoundary - Player->Width / 2);
+      // bool32 TopTileCovered = (Y < TopBoundary + Player->Height / 2);
+      // bool32 BottomTileCovered =
+      //     (Y > BottomBoundary - Player->Height / 2);
+
+      // Assert(!(LeftTileCovered && RightTileCovered));
+      // Assert(!(TopTileCovered && BottomTileCovered));
+
+      // if (LeftTileCovered) {
+      //   DrawTile(TileX - 1, TileY);
+      // }
+      // if (RightTileCovered) {
+      //   DrawTile(TileX + 1, TileY);
+      // }
+      // if (TopTileCovered) {
+      //   DrawTile(TileX, TileY - 1);
+      // }
+      // if (BottomTileCovered) {
+      //   DrawTile(TileX, TileY + 1);
+      // }
+      // if (LeftTileCovered && TopTileCovered) {
+      //   DrawTile(TileX - 1, TileY - 1);
+      // }
+      // if (LeftTileCovered && BottomTileCovered) {
+      //   DrawTile(TileX - 1, TileY + 1);
+      // }
+      // if (RightTileCovered && TopTileCovered) {
+      //   DrawTile(TileX + 1, TileY - 1);
+      // }
+      // if (RightTileCovered && BottomTileCovered) {
+      //   DrawTile(TileX + 1, TileY + 1);
+      // }
+    }
+
+    // Debug
+    if (gDrawDebug) {
+      v2i TilePosition = {};
+      TilePosition.x = Player->TileX * kTileWidth;
+      TilePosition.y = Player->TileY * kTileWidth;
+      DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
+    }
+
+    Frame = &Animation->Frames[Animation->Frame];
+    DrawSprite(Player->DrawAt, Player->Width, Player->Height, Frame->XOffset,
+               Frame->YOffset);
+  }
 
   // Animate bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
@@ -703,7 +709,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       v2i Position = {};
       Position.x = Brick->TileX * kTileWidth;
       Position.y = (Brick->TileY - 1) * kTileHeight;
-      DrawSprite(Position, kTileWidth, kTileHeight * 2, Frame->XOffset, Frame->YOffset);
+      DrawSprite(Position, kTileWidth, kTileHeight * 2, Frame->XOffset,
+                 Frame->YOffset);
 
       if (Animation->Counter > Frame->Lasting) {
         Animation->Counter = 0;
