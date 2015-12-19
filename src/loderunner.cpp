@@ -640,19 +640,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Animation->Frames[1] = {128, 32, 2};
           Animation->Frames[2] = {160, 32, 2};
 
-
-
-
-
-          // TODO: add actual animation here
-
-
           Animation = &Brick->Restoring;
-          Animation->FrameCount = 3;
+          Animation->FrameCount = 4;
           Animation->Frame = 0;
-          Animation->Frames[0] = {160, 32, 6};
-          Animation->Frames[1] = {128, 32, 6};
-          Animation->Frames[2] = {96, 32, 6};
+          Animation->Frames[0] = {192, 0, 8};
+          Animation->Frames[1] = {192, 32, 8};
+          Animation->Frames[2] = {192, 64, 8};
+          Animation->Frames[3] = {192, 96, 8};
         }
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
@@ -714,8 +708,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
       v2i Position = {};
       Position.x = Brick->TileX * kTileWidth;
-      Position.y = (Brick->TileY - 1) * kTileHeight;
-      DrawSprite(Position, kTileWidth, kTileHeight * 2, Frame->XOffset,
+      Position.y = Brick->TileY * kTileHeight;
+      DrawSprite(Position, kTileWidth, kTileHeight, Frame->XOffset,
                  Frame->YOffset);
 
       if (Animation->Counter > Frame->Lasting) {
