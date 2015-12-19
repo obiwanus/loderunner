@@ -244,8 +244,6 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player1->Left, IsDown);
           } else if (VKCode == VK_RIGHT) {
             Win32ProcessKeyboardMessage(&Player1->Right, IsDown);
-          } else if (VKCode == 'X') {
-            Win32ProcessKeyboardMessage(&Player1->Turbo, IsDown);
           } else if (VKCode == VK_SPACE) {
             Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
           } else if (VKCode == 'W') {
@@ -258,6 +256,9 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player2->Right, IsDown);
           } else if (VKCode == 'E') {
             Win32ProcessKeyboardMessage(&Player2->Fire, IsDown);
+          } else if (VKCode == 'X') {
+            Win32ProcessKeyboardMessage(&Player1->Turbo, IsDown);
+            Win32ProcessKeyboardMessage(&Player2->Turbo, IsDown);
           } else if (VKCode == 'I') {
 #if BUILD_INTERNAL
             Win32ProcessKeyboardMessage(&Player1->Debug, IsDown);

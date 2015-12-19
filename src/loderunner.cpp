@@ -257,7 +257,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Init players
   for (int p = 0; p < 2; p++) {
-
     player *Player = &gPlayers[p];
     if (Player->Width) {
       continue;
@@ -408,10 +407,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
-
   // Update players
   for (int p = 0; p < 2; p++) {
-
     bool32 Animate = false;
     bool32 Turbo = false;
 
@@ -598,34 +595,38 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Assert(TileX != -10);
 
-      if (CheckTile(TileX, TileY) == LVL_BRICK) {
-        // Adjust the player
-        Player->X += AdjustPlayerX;
+      int TileToBreak = CheckTile(TileX, TileY);
+      int TileAbove = CheckTile(TileX, TileY - 1);
 
-        // Crush the brick
-        Level->Contents[TileY][TileX] = LVL_BLANK;
-        DrawTile(TileX, TileY);
-        Player->FireCooldown = 30;
+      if (TileToBreak == LVL_BRICK && TileAbove != LVL_BRICK &&
+          TileAbove != LVL_BRICK_HARD && TileAbove != LVL_LADDER) {
+          // Adjust the player
+          Player->X += AdjustPlayerX;
 
-        // Remember that
-        crushed_brick *Brick = &CrushedBricks[NextBrickAvailable];
-        NextBrickAvailable = (NextBrickAvailable + 1) % kCrushedBrickCount;
+          // Crush the brick
+          Level->Contents[TileY][TileX] = LVL_BLANK;
+          DrawTile(TileX, TileY);
+          Player->FireCooldown = 30;
 
-        Assert(Brick->IsUsed == false);
+          // Remember that
+          crushed_brick *Brick = &CrushedBricks[NextBrickAvailable];
+          NextBrickAvailable = (NextBrickAvailable + 1) % kCrushedBrickCount;
 
-        Brick->IsUsed = true;
-        Brick->TileX = TileX;
-        Brick->TileY = TileY;
-        Brick->Width = 32;
-        Brick->Height = 64;
+          Assert(Brick->IsUsed == false);
 
-        // Init animation
-        animation *Animation = &Brick->Breaking;
-        Animation->FrameCount = 3;
-        Animation->Frames[0] = {96, 32, 2};
-        Animation->Frames[1] = {128, 32, 2};
-        Animation->Frames[2] = {160, 32, 2};
-      }
+          Brick->IsUsed = true;
+          Brick->TileX = TileX;
+          Brick->TileY = TileY;
+          Brick->Width = 32;
+          Brick->Height = 64;
+
+          // Init animation
+          animation *Animation = &Brick->Breaking;
+          Animation->FrameCount = 3;
+          Animation->Frames[0] = {96, 32, 2};
+          Animation->Frames[1] = {128, 32, 2};
+          Animation->Frames[2] = {160, 32, 2};
+        }
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
 
