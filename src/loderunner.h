@@ -170,7 +170,13 @@ struct crushed_brick {
   int Width;
   int Height;
 
-  int TimeToLive = 8;  // seconds
+  int Countdown;
+
+  enum {
+    CRUSHING = 0,
+    WAITING,
+    RESTORING,
+  } State;
 
   animation Breaking;
   animation Restoring;
@@ -185,7 +191,7 @@ struct level {
   int Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
 };
 
-enum {
+typedef enum {
   LVL_BLANK,
   LVL_BLANK_TMP,
   LVL_BRICK,
@@ -196,7 +202,7 @@ enum {
   LVL_TREASURE,
   LVL_ENEMY,
   LVL_PLAYER,
-};
+} tile_type;
 
 // Platform functions
 

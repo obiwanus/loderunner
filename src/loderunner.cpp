@@ -145,6 +145,13 @@ bool32 CheckTile(int Col, int Row) {
   return Level->Contents[Row][Col];
 }
 
+void SetTile(int Col, int Row, tile_type Value) {
+  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+    return;  // Invalid tile
+  }
+  Level->Contents[Row][Col] = Value;
+}
+
 void DrawTile(int Col, int Row) {
   if (Col < 0 || Row < 0 || Col >= Level->Width || Row >= Level->Height) {
     // Don't draw outside level boundaries
@@ -620,13 +627,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Brick->TileY = TileY;
           Brick->Width = 32;
           Brick->Height = 64;
+          Brick->State = Brick->CRUSHING;
+          Brick->Countdown = 60 * 8;  // 8 seconds
 
           // Init animation
-          animation *Animation = &Brick->Breaking;
+          animation *Animation = NULL;
+
+          Animation = &Brick->Breaking;
           Animation->FrameCount = 3;
           Animation->Frames[0] = {96, 32, 2};
           Animation->Frames[1] = {128, 32, 2};
           Animation->Frames[2] = {160, 32, 2};
+
+          Animation = &Brick->Restoring;
+          Animation->FrameCount = 3;
+          Animation->Frames[0] = {160, 32, 6};
+          Animation->Frames[1] = {128, 32, 6};
+          Animation->Frames[2] = {96, 32, 6};
         }
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
@@ -679,10 +696,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
                Frame->YOffset);
   }
 
-  // Animate bricks
+  // Process bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
     crushed_brick *Brick = &CrushedBricks[i];
-    if (Brick->IsUsed) {
+    if (!Brick->IsUsed) {
+      continue;
+    }
+
+    if (Brick->State == Brick->CRUSHING) {
       // @copypaste
       animation *Animation = &Brick->Breaking;
       frame *Frame = &Animation->Frames[Animation->Frame];
@@ -697,13 +718,42 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Animation->Counter = 0;
         Animation->Frame++;
       }
+      if (Animation->Frame >= Animation->FrameCount) {
+        Brick->State = Brick->WAITING;
+        continue;
+      }
+      Animation->Counter += 1;
+    }
 
-      // Don't show more frames than there is
-      if (Animation->Frame == Animation->FrameCount) {
+    if (Brick->State == Brick->WAITING) {
+      Brick->Countdown--;
+      if (Brick->Countdown <= 0) {
+        Brick->State = Brick->RESTORING;
+      }
+    }
+
+    if (Brick->State == Brick->RESTORING) {
+      // @copypaste
+      animation *Animation = &Brick->Restoring;
+      frame *Frame = &Animation->Frames[Animation->Frame];
+
+      v2i Position = {};
+      Position.x = Brick->TileX * kTileWidth;
+      Position.y = (Brick->TileY - 1) * kTileHeight;
+      DrawSprite(Position, kTileWidth, kTileHeight * 2, Frame->XOffset,
+                 Frame->YOffset);
+
+      if (Animation->Counter > Frame->Lasting) {
+        Animation->Counter = 0;
+        Animation->Frame++;
+      }
+      if (Animation->Frame >= Animation->FrameCount) {
+        SetTile(Brick->TileX, Brick->TileY, LVL_BRICK);
+        DrawTile(Brick->TileX, Brick->TileY - 1);
+        DrawTile(Brick->TileX, Brick->TileY);
         Brick->IsUsed = false;
         continue;
       }
-
       Animation->Counter += 1;
     }
   }
