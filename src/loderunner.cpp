@@ -155,13 +155,13 @@ void DrawTile(int Col, int Row) {
   Position.y = (Row * kTileHeight);
   int Value = CheckTile(Col, Row);
   if (Value == LVL_BRICK) {
-    DrawSprite(Position, kTileWidth, kTileHeight, 160, 128);
-  } else if (Value == LVL_BRICK_HARD) {
     DrawSprite(Position, kTileWidth, kTileHeight, 160, 96);
+  } else if (Value == LVL_BRICK_HARD) {
+    DrawSprite(Position, kTileWidth, kTileHeight, 128, 96);
   } else if (Value == LVL_LADDER) {
     DrawSprite(Position, kTileWidth, kTileHeight, 96, 128);
   } else if (Value == LVL_ROPE) {
-    DrawSprite(Position, kTileWidth, kTileHeight, 128, 96);
+    DrawSprite(Position, kTileWidth, kTileHeight, 128, 128);
   } else if (Value == LVL_TREASURE) {
     DrawSprite(Position, kTileWidth, kTileHeight, 96, 96);
   } else if (Value == LVL_BLANK || LVL_BLANK_TMP || Value == LVL_PLAYER ||
@@ -269,22 +269,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Animation->Frames[0] = {72, 0, 0};
 
     // NOTE:
-    // - Enemies: 6, 3, 3, speed = 2
-    // - Player: 3, 1, 1, speed = 4
+    // - Enemies: 6, 4, 6, speed = 2
+    // - Player: 3, 2, 3, speed = 4
 
     // Going right
     Animation = &Player->GoingRight;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 0, 3};
-    Animation->Frames[1] = {24, 0, 1};
-    Animation->Frames[2] = {48, 0, 1};
+    Animation->Frames[0] = {0, 0, 6};
+    Animation->Frames[1] = {24, 0, 4};
+    Animation->Frames[2] = {48, 0, 6};
 
     // Going left
     Animation = &Player->GoingLeft;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 32, 3};
-    Animation->Frames[1] = {24, 32, 1};
-    Animation->Frames[2] = {48, 32, 1};
+    Animation->Frames[0] = {0, 32, 6};
+    Animation->Frames[1] = {24, 32, 4};
+    Animation->Frames[2] = {48, 32, 6};
 
     // NOTE:
     // - Enemies: 4, 4, 6, speed = 2
@@ -293,22 +293,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // On rope right
     Animation = &Player->RopeRight;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 64, 2};
-    Animation->Frames[1] = {24, 64, 2};
-    Animation->Frames[2] = {48, 64, 3};
+    Animation->Frames[0] = {0, 64, 6};
+    Animation->Frames[1] = {24, 64, 4};
+    Animation->Frames[2] = {48, 64, 6};
 
-    // On rope right
+    // On rope left
     Animation = &Player->RopeLeft;
     Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 96, 2};
-    Animation->Frames[1] = {24, 96, 2};
-    Animation->Frames[2] = {48, 96, 3};
+    Animation->Frames[0] = {0, 96, 6};
+    Animation->Frames[1] = {24, 96, 4};
+    Animation->Frames[2] = {48, 96, 6};
 
     // On ladder
     Animation = &Player->Climbing;
     Animation->FrameCount = 2;
-    Animation->Frames[0] = {0, 128, 2};
-    Animation->Frames[1] = {24, 128, 2};
+    Animation->Frames[0] = {0, 128, 8};
+    Animation->Frames[1] = {24, 128, 8};
   }
 
   // Init player
@@ -364,6 +364,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Value = LVL_TREASURE;
         else if (Symbol == '=')
           Value = LVL_BRICK;
+        else if (Symbol == '+')
+          Value = LVL_BRICK_HARD;
         else if (Symbol == '#')
           Value = LVL_LADDER;
         else if (Symbol == '-')
@@ -376,8 +378,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Player->TileY = Row;
           Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
           Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
-          Player->DrawAt = {Player->X - Player->Width / 2,
-                            Player->Y - Player->Height / 2};
           PlayerSet = true;
         }
 
@@ -418,7 +418,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       gDrawDebug = !gDrawDebug;
     }
 
-    int Speed = 4;
+    int Speed = 2;
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
@@ -562,21 +562,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (PressedFire && !IsFalling && !Player->FireCooldown) {
       int TileY = Player->TileY + 1;
       int TileX = -10;
+      int AdjustPlayerX = 0;
+
       if (Player->Facing == LEFT) {
         int BorderX = (Player->TileX + 1) * kTileWidth - (kHumanWidth / 2 - 4);
         if (Player->X < BorderX) {
           TileX = Player->TileX - 1;
         } else {
           TileX = Player->TileX;
-          // Adjust
-          Player->X += kHumanWidth / 2;
+          AdjustPlayerX = kHumanWidth / 2;
         }
       } else if (Player->Facing == RIGHT) {
         int BorderX = Player->TileX * kTileWidth + (kHumanWidth / 2 - 4);
         if (Player->X < BorderX) {
           TileX = Player->TileX;
-          // Adjust
-          Player->X -= kHumanWidth / 2;
+          AdjustPlayerX = -kHumanWidth / 2;
         } else {
           TileX = Player->TileX + 1;
         }
@@ -584,6 +584,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Assert(TileX != -10);
 
       if (CheckTile(TileX, TileY) == LVL_BRICK) {
+        // Adjust the player
+        Player->X += AdjustPlayerX;
+
         // Crush the brick
         Level->Contents[TileY][TileX] = LVL_BLANK;
         DrawTile(TileX, TileY);
@@ -623,8 +626,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (Animation->Counter >= Frame->Lasting) {
         Animation->Counter = 0;
         Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
-        Player->DrawAt = {Player->X - Player->Width / 2,
-                          Player->Y - Player->Height / 2};
       }
       Animation->Counter += 1;
     }
@@ -694,7 +695,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     Frame = &Animation->Frames[Animation->Frame];
-    DrawSprite(Player->DrawAt, Player->Width, Player->Height, Frame->XOffset,
+    v2i Position = {Player->X - Player->Width / 2,
+                    Player->Y - Player->Height / 2};
+    DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset,
                Frame->YOffset);
   }
 
