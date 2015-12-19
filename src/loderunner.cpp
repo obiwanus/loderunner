@@ -409,13 +409,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Update players
   for (int p = 0; p < 2; p++) {
-    bool32 Animate = false;
-    bool32 Turbo = false;
 
     player *Player = &gPlayers[p];
     if (!Player->IsActive) {
       continue;
     }
+
+    bool32 Animate = false;
+    bool32 Turbo = false;
 
     // Update player
     player_input *Input = &NewInput->Players[p];
@@ -630,45 +631,52 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
     if (Player->FireCooldown > 0) Player->FireCooldown--;
 
-    Assert(Player->Animation != NULL);
-
-    // Draw player
+    // Redraw tiles covered by player
     {
-      animation *Animation = Player->Animation;
-      frame *Frame = &Animation->Frames[Animation->Frame];
-
-      if (Animate) {
-        if (Animation->Counter >= Frame->Lasting) {
-          Animation->Counter = 0;
-          Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
-        }
-        Animation->Counter += 1;
-      }
-
-      // Redraw tiles covered by player
-      {
-        // Redraw in a dumb way
-        for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
-          for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
-            DrawTile(Col, Row);
-          }
+      for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
+        for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
+          DrawTile(Col, Row);
         }
       }
-
-      // Debug
-      if (gDrawDebug) {
-        v2i TilePosition = {};
-        TilePosition.x = Player->TileX * kTileWidth;
-        TilePosition.y = Player->TileY * kTileWidth;
-        DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
-      }
-
-      Frame = &Animation->Frames[Animation->Frame];
-      v2i Position = {Player->X - Player->Width / 2,
-                      Player->Y - Player->Height / 2};
-      DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset,
-                 Frame->YOffset);
     }
+
+    Player->Animate = Animate;
+  }
+
+  // Draw players
+  for (int p = 0; p < 2; p++) {
+    // We're drawing them in a separate loop so they don't
+    // overdraw each other
+
+    player *Player = &gPlayers[p];
+    if (!Player->IsActive) {
+      continue;
+    }
+
+    animation *Animation = Player->Animation;
+    frame *Frame = &Animation->Frames[Animation->Frame];
+
+    if (Player->Animate) {
+      if (Animation->Counter >= Frame->Lasting) {
+        Animation->Counter = 0;
+        Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
+      }
+      Animation->Counter += 1;
+    }
+
+    // Debug
+    if (gDrawDebug) {
+      v2i TilePosition = {};
+      TilePosition.x = Player->TileX * kTileWidth;
+      TilePosition.y = Player->TileY * kTileWidth;
+      DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
+    }
+
+    Frame = &Animation->Frames[Animation->Frame];
+    v2i Position = {Player->X - Player->Width / 2,
+                    Player->Y - Player->Height / 2};
+    DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset,
+               Frame->YOffset);
   }
 
   // Animate bricks

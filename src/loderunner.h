@@ -159,6 +159,7 @@ struct player {
   animation RopeRight;
   animation Falling;
 
+  bool32 Animate;
   bool32 IsActive = false;
 };
 
