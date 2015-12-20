@@ -213,23 +213,23 @@ internal bmp_file *LoadSprite(char const *Filename) {
   return Result;
 }
 
-bool32 AcceptableMove(player *Player) {
+bool32 AcceptableMove(person *Person) {
   // Tells whether the player can be legitimately
   // placed in its position
 
-  int PlayerLeft = (int)Player->X - Player->Width / 2;
-  int PlayerRight = (int)Player->X + Player->Width / 2;
-  int PlayerTop = (int)Player->Y - Player->Height / 2;
-  int PlayerBottom = (int)Player->Y + Player->Height / 2;
+  int PersonLeft = (int)Person->X - Person->Width / 2;
+  int PersonRight = (int)Person->X + Person->Width / 2;
+  int PersonTop = (int)Person->Y - Person->Height / 2;
+  int PersonBottom = (int)Person->Y + Person->Height / 2;
 
   // Don't go away from the level
-  if (PlayerLeft < 0 || PlayerTop < 0 ||
-      PlayerRight > Level->Width * kTileWidth ||
-      PlayerBottom > Level->Height * kTileHeight)
+  if (PersonLeft < 0 || PersonTop < 0 ||
+      PersonRight > Level->Width * kTileWidth ||
+      PersonBottom > Level->Height * kTileHeight)
     return false;
 
-  int TileX = ((int)Player->X + Player->Width / 2) / kTileWidth;
-  int TileY = ((int)Player->Y + Player->Width / 2) / kTileHeight;
+  int TileX = ((int)Person->X + Person->Width / 2) / kTileWidth;
+  int TileY = ((int)Person->Y + Person->Width / 2) / kTileHeight;
   int StartCol = (TileX <= 0) ? 0 : TileX - 1;
   int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
   int StartRow = (TileY <= 0) ? 0 : TileY - 1;
@@ -245,12 +245,228 @@ bool32 AcceptableMove(player *Player) {
       int TileRight = (Col + 1) * kTileWidth;
       int TileTop = Row * kTileHeight;
       int TileBottom = (Row + 1) * kTileHeight;
-      if (PlayerRight > TileLeft && PlayerLeft < TileRight &&
-          PlayerBottom > TileTop && PlayerTop < TileBottom)
+      if (PersonRight > TileLeft && PersonLeft < TileRight &&
+          PersonBottom > TileTop && PersonTop < TileBottom)
         return false;
     }
   }
   return true;
+}
+
+void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
+                  bool32 PressedDown, bool32 PressedLeft, bool32 PressedRight,
+                  bool32 PressedFire, bool32 Turbo) {
+
+  bool32 Animate = false;
+
+  // TODO: make the Person fall from the ladder only when he
+  // doesn't touch the ladder at all
+  bool32 OnLadder = CheckTile(Person->TileX, Person->TileY) == LVL_LADDER;
+
+  bool32 LadderBelow = false;
+  {
+    int Col = Person->TileX;
+    int Row = Person->TileY + 1;
+    int PlayerBottom = (int)Person->Y + Person->Height / 2;
+    int TileTop = Row * kTileHeight;
+    if (CheckTile(Col, Row) == LVL_LADDER) {
+      if (PlayerBottom >= TileTop) LadderBelow = true;
+    }
+  }
+
+  bool32 CanClimb = false;
+  if (OnLadder || LadderBelow) {
+    int LadderCenter = Person->TileX * kTileWidth + kTileWidth / 2;
+    int PlayerX = (int)Person->X;
+    CanClimb = Abs(PlayerX - LadderCenter) < (Person->Width / 3);
+  }
+
+  bool32 OnRope = false;
+  if (CheckTile(Person->TileX, Person->TileY) == LVL_ROPE) {
+    int RopeY = Person->TileY * kTileHeight;
+    int PlayerTop = (int)Person->Y - Person->Height / 2;
+    OnRope = (PlayerTop == RopeY) ||
+             (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
+    // Adjust Person on a rope
+    if (OnRope) {
+      Person->Y = RopeY + Person->Height / 2;
+    }
+  }
+
+  // Gravity
+  Person->IsFalling = false;
+  {
+    int Old = Person->Y;
+    Person->Y += Speed;
+    if (!AcceptableMove(Person) || OnLadder || LadderBelow || Turbo || OnRope) {
+      Person->Y = Old;
+      Person->IsFalling = false;
+    } else {
+      Person->IsFalling = true;
+      Animate = true;
+      Person->Animation = &Person->Falling;
+    }
+  }
+
+  // Update based on movement keys
+  if (PressedRight && (!Person->IsFalling || Turbo)) {
+    int Old = Person->X;
+    Person->X += Speed;
+    if (!AcceptableMove(Person)) {
+      Person->X = Old;
+    } else {
+      if (!OnRope) {
+        Person->Animation = &Person->GoingRight;
+      } else {
+        Person->Animation = &Person->RopeRight;
+      }
+      Animate = true;
+      Person->Facing = RIGHT;
+    }
+  }
+
+  if (PressedLeft && (!Person->IsFalling || Turbo)) {
+    int Old = Person->X;
+    Person->X -= Speed;
+    if (!AcceptableMove(Person)) {
+      Person->X = Old;
+    } else {
+      if (!OnRope) {
+        Person->Animation = &Person->GoingLeft;
+      } else {
+        Person->Animation = &Person->RopeLeft;
+      }
+      Animate = true;
+      Person->Facing = LEFT;
+    }
+  }
+
+  bool32 Climbing = false;
+  if (PressedUp && (CanClimb || Turbo)) {
+    int Old = Person->Y;
+    Person->Y -= Speed;
+
+    // @refactor?
+    int PlayerTile = CheckTile(Person->TileX, Person->TileY);
+    int PlayerBottom = (int)Person->Y + Person->Height / 2;
+
+    bool32 GotFlying = (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
+                        PlayerTile == LVL_ROPE) &&
+                       (PlayerBottom < (Person->TileY + 1) * kTileHeight);
+
+    if (!AcceptableMove(Person) || GotFlying && !Turbo) {
+      Person->Y = Old;
+    } else {
+      Climbing = true;
+      Person->Animation = &Person->Climbing;
+      Animate = true;
+    }
+  }
+
+  bool32 Descending = false;
+  if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
+    int Old = Person->Y;
+    Person->Y += Speed;
+    if (!AcceptableMove(Person)) {
+      Person->Y = Old;
+    } else if (LadderBelow || CanClimb) {
+      Descending = true;
+      Person->Animation = &Person->Climbing;
+      Animate = true;
+    }
+  }
+
+  // Adjust Person on ladder
+  if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
+    Person->X = Person->TileX * kTileWidth + kTileWidth / 2;
+  }
+
+  Person->Animate =
+      Animate && !(PressedDown && PressedUp) && !(PressedLeft && PressedRight);
+
+  // Update Person tile
+  Person->TileX = (int)Person->X / kTileWidth;
+  Person->TileY = (int)Person->Y / kTileHeight;
+
+  // Fire
+  if (PressedFire && !Person->IsFalling && !Person->FireCooldown) {
+    int TileY = Person->TileY + 1;
+    int TileX = -10;
+    int AdjustPersonX = 0;
+
+    if (Person->Facing == LEFT) {
+      int BorderX = (Person->TileX + 1) * kTileWidth - (kHumanWidth / 2 - 4);
+      if (Person->X < BorderX) {
+        TileX = Person->TileX - 1;
+      } else {
+        TileX = Person->TileX;
+        AdjustPersonX = kHumanWidth / 2;
+      }
+    } else if (Person->Facing == RIGHT) {
+      int BorderX = Person->TileX * kTileWidth + (kHumanWidth / 2 - 4);
+      if (Person->X < BorderX) {
+        TileX = Person->TileX;
+        AdjustPersonX = -kHumanWidth / 2;
+      } else {
+        TileX = Person->TileX + 1;
+      }
+    }
+    Assert(TileX != -10);
+
+    int TileToBreak = CheckTile(TileX, TileY);
+    int TileAbove = CheckTile(TileX, TileY - 1);
+
+    if (TileToBreak == LVL_BRICK && TileAbove != LVL_BRICK &&
+        TileAbove != LVL_BRICK_HARD && TileAbove != LVL_LADDER) {
+      // Adjust the Person
+      Person->X += AdjustPersonX;
+
+      // Crush the brick
+      Level->Contents[TileY][TileX] = LVL_BLANK;
+      DrawTile(TileX, TileY);
+      Person->FireCooldown = 30;
+
+      // Remember that
+      crushed_brick *Brick = &CrushedBricks[NextBrickAvailable];
+      NextBrickAvailable = (NextBrickAvailable + 1) % kCrushedBrickCount;
+
+      Assert(Brick->IsUsed == false);
+
+      Brick->IsUsed = true;
+      Brick->TileX = TileX;
+      Brick->TileY = TileY;
+      Brick->Width = 32;
+      Brick->Height = 64;
+      Brick->State = Brick->CRUSHING;
+      Brick->Countdown = 60 * 8;  // 8 seconds
+
+      // Init animation
+      animation *Animation = NULL;
+
+      Animation = &Brick->Breaking;
+      Animation->FrameCount = 3;
+      Animation->Frame = 0;
+      Animation->Frames[0] = {96, 32, 2};
+      Animation->Frames[1] = {128, 32, 2};
+      Animation->Frames[2] = {160, 32, 2};
+
+      Animation = &Brick->Restoring;
+      Animation->FrameCount = 4;
+      Animation->Frame = 0;
+      Animation->Frames[0] = {192, 0, 8};
+      Animation->Frames[1] = {192, 32, 8};
+      Animation->Frames[2] = {192, 64, 8};
+      Animation->Frames[3] = {192, 96, 8};
+    }
+  }
+  if (Person->FireCooldown > 0) Person->FireCooldown--;
+
+  // Redraw tiles covered by person
+  for (int Row = Person->TileY - 1; Row <= Person->TileY + 1; Row++) {
+    for (int Col = Person->TileX - 1; Col <= Person->TileX + 1; Col++) {
+      DrawTile(Col, Row);
+    }
+  }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -327,8 +543,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Enemy->TileY = Row;
           Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
           Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
-        }
-        else if (Symbol == 'p') {
+        } else if (Symbol == 'p') {
           Value = LVL_PLAYER;
           player *Player = &gPlayers[0];
           if (Player->IsActive) {
@@ -366,8 +581,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Init players
-  for (int p = 0; p < 2; p++) {
-    player *Player = &gPlayers[p];
+  for (int i = 0; i < 2; i++) {
+    player *Player = &gPlayers[i];
     if (Player->IsInitialized) {
       continue;
     }
@@ -480,19 +695,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Update players
-  for (int p = 0; p < 2; p++) {
-
-    player *Player = &gPlayers[p];
+  for (int i = 0; i < 2; i++) {
+    player *Player = &gPlayers[i];
     if (!Player->IsActive) {
       continue;
     }
 
-    bool32 Animate = false;
     bool32 Turbo = false;
     int Speed = 4;
 
     // Update player
-    player_input *Input = &NewInput->Players[p];
+    player_input *Input = &NewInput->Players[i];
+
+    if (Input->Debug.EndedDown) {
+      gDrawDebug = !gDrawDebug;
+    }
 
     bool32 PressedUp = Input->Up.EndedDown;
     bool32 PressedDown = Input->Down.EndedDown;
@@ -500,9 +717,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedRight = Input->Right.EndedDown;
     bool32 PressedFire = Input->Fire.EndedDown;
 
-    if (Input->Debug.EndedDown) {
-      gDrawDebug = !gDrawDebug;
-    }
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
@@ -511,226 +725,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 #endif
 
-    // TODO: make the player fall from the ladder only when he
-    // doesn't touch the ladder at all
-    bool32 OnLadder = CheckTile(Player->TileX, Player->TileY) == LVL_LADDER;
-
-    bool32 LadderBelow = false;
-    {
-      int Col = Player->TileX;
-      int Row = Player->TileY + 1;
-      int PlayerBottom = (int)Player->Y + Player->Height / 2;
-      int TileTop = Row * kTileHeight;
-      if (CheckTile(Col, Row) == LVL_LADDER) {
-        if (PlayerBottom >= TileTop) LadderBelow = true;
-      }
-    }
-
-    bool32 CanClimb = false;
-    if (OnLadder || LadderBelow) {
-      int LadderCenter = Player->TileX * kTileWidth + kTileWidth / 2;
-      int PlayerX = (int)Player->X;
-      CanClimb = Abs(PlayerX - LadderCenter) < (Player->Width / 3);
-    }
-
-    bool32 OnRope = false;
-    if (CheckTile(Player->TileX, Player->TileY) == LVL_ROPE) {
-      int RopeY = Player->TileY * kTileHeight;
-      int PlayerTop = (int)Player->Y - Player->Height / 2;
-      OnRope = (PlayerTop == RopeY) ||
-               (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
-      // Adjust player on a rope
-      if (OnRope) {
-        Player->Y = RopeY + Player->Height / 2;
-      }
-    }
-
-    // Gravity
-    bool32 IsFalling = false;
-    {
-      int Old = Player->Y;
-      Player->Y += Speed;
-      if (!AcceptableMove(Player) || OnLadder || LadderBelow || Turbo ||
-          OnRope) {
-        Player->Y = Old;
-        IsFalling = false;
-      } else {
-        IsFalling = true;
-        Animate = true;
-        Player->Animation = &Player->Falling;
-      }
-    }
-
-    // Update based on movement keys
-    if (PressedRight && (!IsFalling || Turbo)) {
-      int Old = Player->X;
-      Player->X += Speed;
-      if (!AcceptableMove(Player)) {
-        Player->X = Old;
-      } else {
-        if (!OnRope) {
-          Player->Animation = &Player->GoingRight;
-        } else {
-          Player->Animation = &Player->RopeRight;
-        }
-        Animate = true;
-        Player->Facing = RIGHT;
-      }
-    }
-
-    if (PressedLeft && (!IsFalling || Turbo)) {
-      int Old = Player->X;
-      Player->X -= Speed;
-      if (!AcceptableMove(Player)) {
-        Player->X = Old;
-      } else {
-        if (!OnRope) {
-          Player->Animation = &Player->GoingLeft;
-        } else {
-          Player->Animation = &Player->RopeLeft;
-        }
-        Animate = true;
-        Player->Facing = LEFT;
-      }
-    }
-
-    bool32 Climbing = false;
-    if (PressedUp && (CanClimb || Turbo)) {
-      int Old = Player->Y;
-      Player->Y -= Speed;
-
-      // @refactor?
-      int PlayerTile = CheckTile(Player->TileX, Player->TileY);
-      int PlayerBottom = (int)Player->Y + Player->Height / 2;
-
-      bool32 GotFlying =
-          (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
-           PlayerTile == LVL_ROPE) &&
-          (PlayerBottom < (Player->TileY + 1) * kTileHeight);
-
-      if (!AcceptableMove(Player) || GotFlying && !Turbo) {
-        Player->Y = Old;
-      } else {
-        Climbing = true;
-        Player->Animation = &Player->Climbing;
-        Animate = true;
-      }
-    }
-
-    bool32 Descending = false;
-    if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
-      int Old = Player->Y;
-      Player->Y += Speed;
-      if (!AcceptableMove(Player)) {
-        Player->Y = Old;
-      } else if (LadderBelow || CanClimb) {
-        Descending = true;
-        Player->Animation = &Player->Climbing;
-        Animate = true;
-      }
-    }
-
-    // Adjust player on ladder
-    if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
-      Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
-    }
-
-    Animate = Animate && !(PressedDown && PressedUp) &&
-              !(PressedLeft && PressedRight);
-
-    // Update player tile
-    Player->TileX = (int)Player->X / kTileWidth;
-    Player->TileY = (int)Player->Y / kTileHeight;
-
-    // Fire
-    if (PressedFire && !IsFalling && !Player->FireCooldown) {
-      int TileY = Player->TileY + 1;
-      int TileX = -10;
-      int AdjustPlayerX = 0;
-
-      if (Player->Facing == LEFT) {
-        int BorderX = (Player->TileX + 1) * kTileWidth - (kHumanWidth / 2 - 4);
-        if (Player->X < BorderX) {
-          TileX = Player->TileX - 1;
-        } else {
-          TileX = Player->TileX;
-          AdjustPlayerX = kHumanWidth / 2;
-        }
-      } else if (Player->Facing == RIGHT) {
-        int BorderX = Player->TileX * kTileWidth + (kHumanWidth / 2 - 4);
-        if (Player->X < BorderX) {
-          TileX = Player->TileX;
-          AdjustPlayerX = -kHumanWidth / 2;
-        } else {
-          TileX = Player->TileX + 1;
-        }
-      }
-      Assert(TileX != -10);
-
-      int TileToBreak = CheckTile(TileX, TileY);
-      int TileAbove = CheckTile(TileX, TileY - 1);
-
-      if (TileToBreak == LVL_BRICK && TileAbove != LVL_BRICK &&
-          TileAbove != LVL_BRICK_HARD && TileAbove != LVL_LADDER) {
-          // Adjust the player
-          Player->X += AdjustPlayerX;
-
-          // Crush the brick
-          Level->Contents[TileY][TileX] = LVL_BLANK;
-          DrawTile(TileX, TileY);
-          Player->FireCooldown = 30;
-
-          // Remember that
-          crushed_brick *Brick = &CrushedBricks[NextBrickAvailable];
-          NextBrickAvailable = (NextBrickAvailable + 1) % kCrushedBrickCount;
-
-          Assert(Brick->IsUsed == false);
-
-          Brick->IsUsed = true;
-          Brick->TileX = TileX;
-          Brick->TileY = TileY;
-          Brick->Width = 32;
-          Brick->Height = 64;
-          Brick->State = Brick->CRUSHING;
-          Brick->Countdown = 60 * 8;  // 8 seconds
-
-          // Init animation
-          animation *Animation = NULL;
-
-          Animation = &Brick->Breaking;
-          Animation->FrameCount = 3;
-          Animation->Frame = 0;
-          Animation->Frames[0] = {96, 32, 2};
-          Animation->Frames[1] = {128, 32, 2};
-          Animation->Frames[2] = {160, 32, 2};
-
-          Animation = &Brick->Restoring;
-          Animation->FrameCount = 4;
-          Animation->Frame = 0;
-          Animation->Frames[0] = {192, 0, 8};
-          Animation->Frames[1] = {192, 32, 8};
-          Animation->Frames[2] = {192, 64, 8};
-          Animation->Frames[3] = {192, 96, 8};
-        }
-    }
-    if (Player->FireCooldown > 0) Player->FireCooldown--;
-
-    // Redraw tiles covered by player
-    {
-      for (int Row = Player->TileY - 1; Row <= Player->TileY + 1; Row++) {
-        for (int Col = Player->TileX - 1; Col <= Player->TileX + 1; Col++) {
-          DrawTile(Col, Row);
-        }
-      }
-    }
-
-    Player->Animate = Animate;
+    UpdatePerson(Player, Speed, PressedUp, PressedDown, PressedLeft,
+                 PressedRight, PressedFire, Turbo);
   }
 
   // Update enemies
-  // @copypaste
   for (int i = 0; i < Level->EnemyCount; i++) {
-
     enemy *Enemy = &gEnemies[i];
 
     bool32 Animate = false;
@@ -743,148 +743,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedDown = Enemy->Direction == Enemy->DOWN;
     bool32 PressedLeft = Enemy->Direction == Enemy->LEFT;
     bool32 PressedRight = Enemy->Direction == Enemy->RIGHT;
+    bool32 PressedFire = false;
 
-    // TODO: make the Enemy fall from the ladder only when he
-    // doesn't touch the ladder at all
-    bool32 OnLadder = CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER;
-
-    bool32 LadderBelow = false;
-    {
-      int Col = Enemy->TileX;
-      int Row = Enemy->TileY + 1;
-      int PlayerBottom = (int)Enemy->Y + Enemy->Height / 2;
-      int TileTop = Row * kTileHeight;
-      if (CheckTile(Col, Row) == LVL_LADDER) {
-        if (PlayerBottom >= TileTop) LadderBelow = true;
-      }
-    }
-
-    bool32 CanClimb = false;
-    if (OnLadder || LadderBelow) {
-      int LadderCenter = Enemy->TileX * kTileWidth + kTileWidth / 2;
-      int PlayerX = (int)Enemy->X;
-      CanClimb = Abs(PlayerX - LadderCenter) < (Enemy->Width / 3);
-    }
-
-    bool32 OnRope = false;
-    if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_ROPE) {
-      int RopeY = Enemy->TileY * kTileHeight;
-      int PlayerTop = (int)Enemy->Y - Enemy->Height / 2;
-      OnRope = (PlayerTop == RopeY) ||
-               (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
-      // Adjust Enemy on a rope
-      if (OnRope) {
-        Enemy->Y = RopeY + Enemy->Height / 2;
-      }
-    }
-
-    // Gravity
-    bool32 IsFalling = false;
-    {
-      int Old = Enemy->Y;
-      Enemy->Y += Speed;
-      if (!AcceptableMove((player *)Enemy) || OnLadder || LadderBelow || Turbo ||
-          OnRope) {
-        Enemy->Y = Old;
-        IsFalling = false;
-      } else {
-        IsFalling = true;
-        Animate = true;
-        Enemy->Animation = &Enemy->Falling;
-      }
-    }
-
-    // Update based on movement keys
-    if (PressedRight && (!IsFalling || Turbo)) {
-      int Old = Enemy->X;
-      Enemy->X += Speed;
-      if (!AcceptableMove((player *)Enemy)) {
-        Enemy->X = Old;
-      } else {
-        if (!OnRope) {
-          Enemy->Animation = &Enemy->GoingRight;
-        } else {
-          Enemy->Animation = &Enemy->RopeRight;
-        }
-        Animate = true;
-        Enemy->Facing = RIGHT;
-      }
-    }
-
-    if (PressedLeft && (!IsFalling || Turbo)) {
-      int Old = Enemy->X;
-      Enemy->X -= Speed;
-      if (!AcceptableMove((player *)Enemy)) {
-        Enemy->X = Old;
-      } else {
-        if (!OnRope) {
-          Enemy->Animation = &Enemy->GoingLeft;
-        } else {
-          Enemy->Animation = &Enemy->RopeLeft;
-        }
-        Animate = true;
-        Enemy->Facing = LEFT;
-      }
-    }
-
-    bool32 Climbing = false;
-    if (PressedUp && (CanClimb || Turbo)) {
-      int Old = Enemy->Y;
-      Enemy->Y -= Speed;
-
-      // @refactor?
-      int PlayerTile = CheckTile(Enemy->TileX, Enemy->TileY);
-      int PlayerBottom = (int)Enemy->Y + Enemy->Height / 2;
-
-      bool32 GotFlying =
-          (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
-           PlayerTile == LVL_ROPE) &&
-          (PlayerBottom < (Enemy->TileY + 1) * kTileHeight);
-
-      if (!AcceptableMove((player *)Enemy) || GotFlying && !Turbo) {
-        Enemy->Y = Old;
-      } else {
-        Climbing = true;
-        Enemy->Animation = &Enemy->Climbing;
-        Animate = true;
-      }
-    }
-
-    bool32 Descending = false;
-    if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
-      int Old = Enemy->Y;
-      Enemy->Y += Speed;
-      if (!AcceptableMove((player *)Enemy)) {
-        Enemy->Y = Old;
-      } else if (LadderBelow || CanClimb) {
-        Descending = true;
-        Enemy->Animation = &Enemy->Climbing;
-        Animate = true;
-      }
-    }
-
-    // Adjust Enemy on ladder
-    if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
-      Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
-    }
-
-    Animate = Animate && !(PressedDown && PressedUp) &&
-              !(PressedLeft && PressedRight);
-
-    // Update Enemy tile
-    Enemy->TileX = (int)Enemy->X / kTileWidth;
-    Enemy->TileY = (int)Enemy->Y / kTileHeight;
-
-    // Redraw tiles covered by Enemy
-    {
-      for (int Row = Enemy->TileY - 1; Row <= Enemy->TileY + 1; Row++) {
-        for (int Col = Enemy->TileX - 1; Col <= Enemy->TileX + 1; Col++) {
-          DrawTile(Col, Row);
-        }
-      }
-    }
-
-    Enemy->Animate = Animate;
+    UpdatePerson(Enemy, Speed, PressedUp, PressedDown, PressedLeft,
+                 PressedRight, PressedFire, Turbo);
   }
 
   // Process bricks
@@ -988,8 +850,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Draw enemies
-  for (int i = 0; i < 2; i++) {
-
+  for (int i = 0; i < Level->EnemyCount; i++) {
     enemy *Enemy = &gEnemies[i];
 
     animation *Animation = Enemy->Animation;
@@ -1004,8 +865,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     Frame = &Animation->Frames[Animation->Frame];
-    v2i Position = {Enemy->X - Enemy->Width / 2,
-                    Enemy->Y - Enemy->Height / 2};
+    v2i Position = {Enemy->X - Enemy->Width / 2, Enemy->Y - Enemy->Height / 2};
     DrawSprite(Position, Enemy->Width, Enemy->Height, Frame->XOffset,
                Frame->YOffset);
   }

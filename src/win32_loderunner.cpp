@@ -262,7 +262,6 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
           } else if (VKCode == 'I') {
 #if BUILD_INTERNAL
             Win32ProcessKeyboardMessage(&Player1->Debug, IsDown);
-            Win32ProcessKeyboardMessage(&Player2->Debug, IsDown);
 #endif
           }
         }

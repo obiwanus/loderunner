@@ -135,7 +135,7 @@ enum {
   RIGHT,
 };
 
-struct player {
+struct person {
   union {
     v2i Position;
     struct {
@@ -148,7 +148,10 @@ struct player {
   int Width;
   int Height;
   int Facing;
+
   int FireCooldown;
+
+  int IsFalling;
 
   // Animation
   animation *Animation;
@@ -161,42 +164,19 @@ struct player {
 
   bool32 Animate;
   bool32 IsInitialized;
+};
+
+struct player : person {
   bool32 IsActive = false;
 };
 
-struct enemy {
-  // @copypaste from player
-  union {
-    v2i Position;
-    struct {
-      int X;
-      int Y;
-    };
-  };
-  int TileX;
-  int TileY;
-  int Width;
-  int Height;
-  int Facing;
-
+struct enemy : person {
   enum {
     LEFT = 0,
     RIGHT,
     UP,
     DOWN,
   } Direction;
-
-  // Animation
-  animation *Animation;
-  animation GoingLeft;
-  animation GoingRight;
-  animation Climbing;
-  animation RopeLeft;
-  animation RopeRight;
-  animation Falling;
-
-  bool32 Animate;
-  bool32 IsInitialized;
 };
 
 struct crushed_brick {
