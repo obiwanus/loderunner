@@ -160,7 +160,43 @@ struct player {
   animation Falling;
 
   bool32 Animate;
+  bool32 IsInitialized;
   bool32 IsActive = false;
+};
+
+struct enemy {
+  // @copypaste from player
+  union {
+    v2i Position;
+    struct {
+      int X;
+      int Y;
+    };
+  };
+  int TileX;
+  int TileY;
+  int Width;
+  int Height;
+  int Facing;
+
+  enum {
+    LEFT = 0,
+    RIGHT,
+    UP,
+    DOWN,
+  } Direction;
+
+  // Animation
+  animation *Animation;
+  animation GoingLeft;
+  animation GoingRight;
+  animation Climbing;
+  animation RopeLeft;
+  animation RopeRight;
+  animation Falling;
+
+  bool32 Animate;
+  bool32 IsInitialized;
 };
 
 struct crushed_brick {
@@ -188,6 +224,7 @@ struct crushed_brick {
 struct level {
   int Width;
   int Height;
+  int EnemyCount;
   int Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
 };
 

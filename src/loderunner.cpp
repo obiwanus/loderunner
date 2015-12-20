@@ -5,6 +5,7 @@ global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
 global player gPlayers[2];
+global enemy *gEnemies;
 global level *Level;
 global bmp_file *gImage;
 
@@ -262,104 +263,45 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     gImage = LoadSprite("img/sprites.bmp");
   }
 
-  // Init players
-  for (int p = 0; p < 2; p++) {
-    player *Player = &gPlayers[p];
-    if (Player->Width) {
-      continue;
-    }
-
-    Player->Width = kHumanWidth;
-    Player->Height = kHumanHeight;
-    Player->Animation = NULL;
-    Player->Facing = RIGHT;
-
-    // Init animations
-    frame *Frames = NULL;
-    animation *Animation = NULL;
-
-    // Falling
-    Animation = &Player->Falling;
-    Animation->FrameCount = 1;
-    Animation->Frames[0] = {72, 0, 0};
-
-    // NOTE:
-    // - Enemies: 6, 4, 6, speed = 2
-    // - Player: 3, 2, 3, speed = 4
-
-    // Going right
-    Animation = &Player->GoingRight;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 0, 3};
-    Animation->Frames[1] = {24, 0, 2};
-    Animation->Frames[2] = {48, 0, 3};
-
-    // Going left
-    Animation = &Player->GoingLeft;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 32, 3};
-    Animation->Frames[1] = {24, 32, 2};
-    Animation->Frames[2] = {48, 32, 3};
-
-    // NOTE:
-    // - Enemies: 6, 4, 6, speed = 2
-    // - Player: 3, 2, 3, speed = 4
-
-    // On rope right
-    Animation = &Player->RopeRight;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 64, 3};
-    Animation->Frames[1] = {24, 64, 2};
-    Animation->Frames[2] = {48, 64, 3};
-
-    // On rope left
-    Animation = &Player->RopeLeft;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 96, 3};
-    Animation->Frames[1] = {24, 96, 2};
-    Animation->Frames[2] = {48, 96, 3};
-
-    // On ladder
-    Animation = &Player->Climbing;
-    Animation->FrameCount = 2;
-    Animation->Frames[0] = {0, 128, 4};
-    Animation->Frames[1] = {24, 128, 4};
-  }
-
   // Init level
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
-    // Load level
-    {
-      char const *Filename = "levels/level_1.txt";
-      file_read_result FileReadResult =
-          GameMemory->DEBUGPlatformReadEntireFile(Filename);
+    char const *Filename = "levels/level_1.txt";
+    file_read_result FileReadResult =
+        GameMemory->DEBUGPlatformReadEntireFile(Filename);
 
-      char *String = (char *)FileReadResult.Memory;
+    char *String = (char *)FileReadResult.Memory;
 
-      // Get level size
-      {
-        int MaxWidth = 0;
-        int Width = 0;
-        int Height = 1;
-        for (int i = 0; i < FileReadResult.MemorySize; i++) {
-          char Symbol = String[i];
-          if (Symbol == '\n') {
-            if (MaxWidth < Width) {
-              MaxWidth = Width;
-            }
-            Width = 0;
-            Height += 1;
-          } else if (Symbol != '\r') {
-            Width += 1;
-          }
+    // Get level info
+    int MaxWidth = 0;
+    int Width = 0;
+    int Height = 1;
+    for (int i = 0; i < FileReadResult.MemorySize; i++) {
+      char Symbol = String[i];
+      if (Symbol == '\n') {
+        if (MaxWidth < Width) {
+          MaxWidth = Width;
         }
-        Level->Width = MaxWidth;
-        Level->Height = Height;
+        Width = 0;
+        Height += 1;
+      } else if (Symbol != '\r') {
+        Width += 1;
       }
+      if (Symbol == 'e') {
+        Level->EnemyCount++;
+      }
+    }
+    Level->Width = MaxWidth;
+    Level->Height = Height;
 
+    // Allocate memory for enemies
+    gEnemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level->EnemyCount);
+
+    // Read level data
+    {
       int Column = 0;
       int Row = 0;
+      int EnemyNum = 0;
       for (int i = 0; i < FileReadResult.MemorySize; i++) {
         char Symbol = String[i];
         int Value = LVL_BLANK;
@@ -376,14 +318,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Value = LVL_LADDER;
         else if (Symbol == '-')
           Value = LVL_ROPE;
-        else if (Symbol == 'e')
+        else if (Symbol == 'e') {
           Value = LVL_ENEMY;
+          enemy *Enemy = &gEnemies[EnemyNum];
+          EnemyNum++;
+          *Enemy = {};  // zero everything
+          Enemy->TileX = Column;
+          Enemy->TileY = Row;
+          Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
+          Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
+        }
         else if (Symbol == 'p') {
           Value = LVL_PLAYER;
           player *Player = &gPlayers[0];
           if (Player->IsActive) {
             Player = &gPlayers[1];
           }
+          *Player = {};  // zero everything
           Player->IsActive = true;
           Player->TileX = Column;
           Player->TileY = Row;
@@ -414,6 +365,120 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
+  // Init players
+  for (int p = 0; p < 2; p++) {
+    player *Player = &gPlayers[p];
+    if (Player->IsInitialized) {
+      continue;
+    }
+
+    Player->IsInitialized = true;
+    Player->Width = kHumanWidth;
+    Player->Height = kHumanHeight;
+    Player->Animation = &Player->Falling;
+    Player->Facing = RIGHT;
+
+    // Init animations
+    frame *Frames = NULL;
+    animation *Animation = NULL;
+
+    // Falling
+    Animation = &Player->Falling;
+    Animation->FrameCount = 1;
+    Animation->Frames[0] = {72, 0, 0};
+
+    // Going right
+    Animation = &Player->GoingRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 0, 3};
+    Animation->Frames[1] = {24, 0, 2};
+    Animation->Frames[2] = {48, 0, 3};
+
+    // Going left
+    Animation = &Player->GoingLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 32, 3};
+    Animation->Frames[1] = {24, 32, 2};
+    Animation->Frames[2] = {48, 32, 3};
+
+    // On rope right
+    Animation = &Player->RopeRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 64, 3};
+    Animation->Frames[1] = {24, 64, 2};
+    Animation->Frames[2] = {48, 64, 3};
+
+    // On rope left
+    Animation = &Player->RopeLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 96, 3};
+    Animation->Frames[1] = {24, 96, 2};
+    Animation->Frames[2] = {48, 96, 3};
+
+    // On ladder
+    Animation = &Player->Climbing;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {0, 128, 4};
+    Animation->Frames[1] = {24, 128, 4};
+  }
+
+  // Init enemies
+  for (int i = 0; i < Level->EnemyCount; i++) {
+    enemy *Enemy = &gEnemies[i];
+    if (Enemy->IsInitialized) {
+      continue;
+    }
+
+    Enemy->IsInitialized = true;
+
+    Enemy->Width = kHumanWidth;
+    Enemy->Height = kHumanHeight;
+    Enemy->Animation = &Enemy->Falling;
+
+    // Init animations
+    frame *Frames = NULL;
+    animation *Animation = NULL;
+
+    // Falling
+    Animation = &Enemy->Falling;
+    Animation->FrameCount = 1;
+    Animation->Frames[0] = {72, 160, 0};
+
+    // Going right
+    Animation = &Enemy->GoingRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 160, 6};
+    Animation->Frames[1] = {24, 160, 4};
+    Animation->Frames[2] = {48, 160, 6};
+
+    // Going left
+    Animation = &Enemy->GoingLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 192, 6};
+    Animation->Frames[1] = {24, 192, 4};
+    Animation->Frames[2] = {48, 192, 6};
+
+    // On rope right
+    Animation = &Enemy->RopeRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 224, 6};
+    Animation->Frames[1] = {24, 224, 4};
+    Animation->Frames[2] = {48, 224, 6};
+
+    // On rope left
+    Animation = &Enemy->RopeLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 256, 6};
+    Animation->Frames[1] = {24, 256, 4};
+    Animation->Frames[2] = {48, 256, 6};
+
+    // On ladder
+    Animation = &Enemy->Climbing;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {0, 288, 8};
+    Animation->Frames[1] = {24, 288, 8};
+  }
+
   // Update players
   for (int p = 0; p < 2; p++) {
 
@@ -424,6 +489,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Animate = false;
     bool32 Turbo = false;
+    int Speed = 4;
 
     // Update player
     player_input *Input = &NewInput->Players[p];
@@ -437,8 +503,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (Input->Debug.EndedDown) {
       gDrawDebug = !gDrawDebug;
     }
-
-    int Speed = 4;
 #ifdef BUILD_INTERNAL
     // Turbo
     if (Input->Turbo.EndedDown) {
@@ -663,6 +727,166 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Player->Animate = Animate;
   }
 
+  // Update enemies
+  // @copypaste
+  for (int i = 0; i < Level->EnemyCount; i++) {
+
+    enemy *Enemy = &gEnemies[i];
+
+    bool32 Animate = false;
+    int Speed = 2;
+    int Turbo = false;
+
+    // Update Enemy
+
+    bool32 PressedUp = Enemy->Direction == Enemy->UP;
+    bool32 PressedDown = Enemy->Direction == Enemy->DOWN;
+    bool32 PressedLeft = Enemy->Direction == Enemy->LEFT;
+    bool32 PressedRight = Enemy->Direction == Enemy->RIGHT;
+
+    // TODO: make the Enemy fall from the ladder only when he
+    // doesn't touch the ladder at all
+    bool32 OnLadder = CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER;
+
+    bool32 LadderBelow = false;
+    {
+      int Col = Enemy->TileX;
+      int Row = Enemy->TileY + 1;
+      int PlayerBottom = (int)Enemy->Y + Enemy->Height / 2;
+      int TileTop = Row * kTileHeight;
+      if (CheckTile(Col, Row) == LVL_LADDER) {
+        if (PlayerBottom >= TileTop) LadderBelow = true;
+      }
+    }
+
+    bool32 CanClimb = false;
+    if (OnLadder || LadderBelow) {
+      int LadderCenter = Enemy->TileX * kTileWidth + kTileWidth / 2;
+      int PlayerX = (int)Enemy->X;
+      CanClimb = Abs(PlayerX - LadderCenter) < (Enemy->Width / 3);
+    }
+
+    bool32 OnRope = false;
+    if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_ROPE) {
+      int RopeY = Enemy->TileY * kTileHeight;
+      int PlayerTop = (int)Enemy->Y - Enemy->Height / 2;
+      OnRope = (PlayerTop == RopeY) ||
+               (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
+      // Adjust Enemy on a rope
+      if (OnRope) {
+        Enemy->Y = RopeY + Enemy->Height / 2;
+      }
+    }
+
+    // Gravity
+    bool32 IsFalling = false;
+    {
+      int Old = Enemy->Y;
+      Enemy->Y += Speed;
+      if (!AcceptableMove((player *)Enemy) || OnLadder || LadderBelow || Turbo ||
+          OnRope) {
+        Enemy->Y = Old;
+        IsFalling = false;
+      } else {
+        IsFalling = true;
+        Animate = true;
+        Enemy->Animation = &Enemy->Falling;
+      }
+    }
+
+    // Update based on movement keys
+    if (PressedRight && (!IsFalling || Turbo)) {
+      int Old = Enemy->X;
+      Enemy->X += Speed;
+      if (!AcceptableMove((player *)Enemy)) {
+        Enemy->X = Old;
+      } else {
+        if (!OnRope) {
+          Enemy->Animation = &Enemy->GoingRight;
+        } else {
+          Enemy->Animation = &Enemy->RopeRight;
+        }
+        Animate = true;
+        Enemy->Facing = RIGHT;
+      }
+    }
+
+    if (PressedLeft && (!IsFalling || Turbo)) {
+      int Old = Enemy->X;
+      Enemy->X -= Speed;
+      if (!AcceptableMove((player *)Enemy)) {
+        Enemy->X = Old;
+      } else {
+        if (!OnRope) {
+          Enemy->Animation = &Enemy->GoingLeft;
+        } else {
+          Enemy->Animation = &Enemy->RopeLeft;
+        }
+        Animate = true;
+        Enemy->Facing = LEFT;
+      }
+    }
+
+    bool32 Climbing = false;
+    if (PressedUp && (CanClimb || Turbo)) {
+      int Old = Enemy->Y;
+      Enemy->Y -= Speed;
+
+      // @refactor?
+      int PlayerTile = CheckTile(Enemy->TileX, Enemy->TileY);
+      int PlayerBottom = (int)Enemy->Y + Enemy->Height / 2;
+
+      bool32 GotFlying =
+          (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
+           PlayerTile == LVL_ROPE) &&
+          (PlayerBottom < (Enemy->TileY + 1) * kTileHeight);
+
+      if (!AcceptableMove((player *)Enemy) || GotFlying && !Turbo) {
+        Enemy->Y = Old;
+      } else {
+        Climbing = true;
+        Enemy->Animation = &Enemy->Climbing;
+        Animate = true;
+      }
+    }
+
+    bool32 Descending = false;
+    if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
+      int Old = Enemy->Y;
+      Enemy->Y += Speed;
+      if (!AcceptableMove((player *)Enemy)) {
+        Enemy->Y = Old;
+      } else if (LadderBelow || CanClimb) {
+        Descending = true;
+        Enemy->Animation = &Enemy->Climbing;
+        Animate = true;
+      }
+    }
+
+    // Adjust Enemy on ladder
+    if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
+      Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
+    }
+
+    Animate = Animate && !(PressedDown && PressedUp) &&
+              !(PressedLeft && PressedRight);
+
+    // Update Enemy tile
+    Enemy->TileX = (int)Enemy->X / kTileWidth;
+    Enemy->TileY = (int)Enemy->Y / kTileHeight;
+
+    // Redraw tiles covered by Enemy
+    {
+      for (int Row = Enemy->TileY - 1; Row <= Enemy->TileY + 1; Row++) {
+        for (int Col = Enemy->TileX - 1; Col <= Enemy->TileX + 1; Col++) {
+          DrawTile(Col, Row);
+        }
+      }
+    }
+
+    Enemy->Animate = Animate;
+  }
+
   // Process bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
     crushed_brick *Brick = &CrushedBricks[i];
@@ -760,6 +984,29 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     v2i Position = {Player->X - Player->Width / 2,
                     Player->Y - Player->Height / 2};
     DrawSprite(Position, Player->Width, Player->Height, Frame->XOffset,
+               Frame->YOffset);
+  }
+
+  // Draw enemies
+  for (int i = 0; i < 2; i++) {
+
+    enemy *Enemy = &gEnemies[i];
+
+    animation *Animation = Enemy->Animation;
+    frame *Frame = &Animation->Frames[Animation->Frame];
+
+    if (Enemy->Animate) {
+      if (Animation->Counter >= Frame->Lasting) {
+        Animation->Counter = 0;
+        Animation->Frame = (Animation->Frame + 1) % Animation->FrameCount;
+      }
+      Animation->Counter += 1;
+    }
+
+    Frame = &Animation->Frames[Animation->Frame];
+    v2i Position = {Enemy->X - Enemy->Width / 2,
+                    Enemy->Y - Enemy->Height / 2};
+    DrawSprite(Position, Enemy->Width, Enemy->Height, Frame->XOffset,
                Frame->YOffset);
   }
 }
