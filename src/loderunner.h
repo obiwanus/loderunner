@@ -135,7 +135,7 @@ enum {
   RIGHT,
 };
 
-struct person {
+struct entity {
   union {
     v2i Position;
     struct {
@@ -147,10 +147,11 @@ struct person {
   int TileY;
   int Width;
   int Height;
+};
+
+struct person : entity {
   int Facing;
-
   int FireCooldown;
-
   int IsFalling;
 
   // Animation
@@ -172,20 +173,21 @@ struct player : person {
 
 struct enemy : person {
   enum {
-    LEFT = 0,
+    LEFT = 1,
     RIGHT,
     UP,
     DOWN,
   } Direction;
 };
 
-struct crushed_brick {
-  bool32 IsUsed = false;
+struct treasure : entity {
   int TileX;
   int TileY;
-  int Width;
-  int Height;
+};
 
+struct crushed_brick : entity {
+
+  bool32 IsUsed = false;
   int Countdown;
 
   enum {
@@ -205,6 +207,7 @@ struct level {
   int Width;
   int Height;
   int EnemyCount;
+  int TreasureCount;
   int Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
 };
 
@@ -219,6 +222,7 @@ typedef enum {
   LVL_TREASURE,
   LVL_ENEMY,
   LVL_PLAYER,
+  LVL_INVALID,
 } tile_type;
 
 // Platform functions

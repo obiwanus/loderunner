@@ -6,6 +6,7 @@ global game_memory *GameMemory;
 
 global player gPlayers[2];
 global enemy *gEnemies;
+global treasure *gTreasures;
 global level *Level;
 global bmp_file *gImage;
 
@@ -141,7 +142,7 @@ internal void DrawSprite(v2i Position, int Width, int Height, int XOffset,
 
 bool32 CheckTile(int Col, int Row) {
   if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
-    return -1;  // Invalid tile
+    return LVL_INVALID;
   }
   return Level->Contents[Row][Col];
 }
@@ -172,7 +173,7 @@ void DrawTile(int Col, int Row) {
     DrawSprite(Position, kTileWidth, kTileHeight, 128, 128);
   } else if (Value == LVL_TREASURE) {
     DrawSprite(Position, kTileWidth, kTileHeight, 96, 96);
-  } else if (Value == LVL_BLANK || LVL_BLANK_TMP || Value == LVL_PLAYER ||
+  } else if (Value == LVL_BLANK || Value == LVL_PLAYER ||
              Value == LVL_ENEMY || Value == LVL_WIN_LADDER) {
     DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
@@ -213,23 +214,23 @@ internal bmp_file *LoadSprite(char const *Filename) {
   return Result;
 }
 
-bool32 AcceptableMove(person *Person) {
+bool32 AcceptableMove(entity *Entity) {
   // Tells whether the player can be legitimately
   // placed in its position
 
-  int PersonLeft = (int)Person->X - Person->Width / 2;
-  int PersonRight = (int)Person->X + Person->Width / 2;
-  int PersonTop = (int)Person->Y - Person->Height / 2;
-  int PersonBottom = (int)Person->Y + Person->Height / 2;
+  int EntityLeft = (int)Entity->X - Entity->Width / 2;
+  int EntityRight = (int)Entity->X + Entity->Width / 2;
+  int EntityTop = (int)Entity->Y - Entity->Height / 2;
+  int EntityBottom = (int)Entity->Y + Entity->Height / 2;
 
   // Don't go away from the level
-  if (PersonLeft < 0 || PersonTop < 0 ||
-      PersonRight > Level->Width * kTileWidth ||
-      PersonBottom > Level->Height * kTileHeight)
+  if (EntityLeft < 0 || EntityTop < 0 ||
+      EntityRight > Level->Width * kTileWidth ||
+      EntityBottom > Level->Height * kTileHeight)
     return false;
 
-  int TileX = ((int)Person->X + Person->Width / 2) / kTileWidth;
-  int TileY = ((int)Person->Y + Person->Width / 2) / kTileHeight;
+  int TileX = ((int)Entity->X + Entity->Width / 2) / kTileWidth;
+  int TileY = ((int)Entity->Y + Entity->Width / 2) / kTileHeight;
   int StartCol = (TileX <= 0) ? 0 : TileX - 1;
   int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
   int StartRow = (TileY <= 0) ? 0 : TileY - 1;
@@ -245,8 +246,8 @@ bool32 AcceptableMove(person *Person) {
       int TileRight = (Col + 1) * kTileWidth;
       int TileTop = Row * kTileHeight;
       int TileBottom = (Row + 1) * kTileHeight;
-      if (PersonRight > TileLeft && PersonLeft < TileRight &&
-          PersonBottom > TileTop && PersonTop < TileBottom)
+      if (EntityRight > TileLeft && EntityLeft < TileRight &&
+          EntityBottom > TileTop && EntityTop < TileBottom)
         return false;
     }
   }
@@ -506,26 +507,42 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (Symbol == 'e') {
         Level->EnemyCount++;
       }
+      if (Symbol == 't') {
+        Level->TreasureCount++;
+      }
     }
     Level->Width = MaxWidth;
     Level->Height = Height;
 
-    // Allocate memory for enemies
+    // Allocate memory for enemies and treasures
     gEnemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level->EnemyCount);
+    gTreasures = (treasure *)GameMemoryAlloc(sizeof(treasure) * Level->TreasureCount);
 
     // Read level data
     {
       int Column = 0;
       int Row = 0;
       int EnemyNum = 0;
+      int TreasureNum = 0;
+
       for (int i = 0; i < FileReadResult.MemorySize; i++) {
         char Symbol = String[i];
         int Value = LVL_BLANK;
 
         if (Symbol == '|')
           Value = LVL_WIN_LADDER;
-        else if (Symbol == 't')
-          Value = LVL_TREASURE;
+        else if (Symbol == 't') {
+          Value = LVL_BLANK;
+          treasure *Treasure = &gTreasures[TreasureNum];
+          TreasureNum++;
+          *Treasure = {};  // zero everything
+          Treasure->TileX = Column;
+          Treasure->TileY = Row;
+          Treasure->Width = kTileWidth;
+          Treasure->Height = kTileHeight;
+          Treasure->X = Treasure->TileX * kTileWidth;
+          Treasure->Y = Treasure->TileY * kTileHeight;
+        }
         else if (Symbol == '=')
           Value = LVL_BRICK;
         else if (Symbol == '+')
@@ -535,7 +552,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         else if (Symbol == '-')
           Value = LVL_ROPE;
         else if (Symbol == 'e') {
-          Value = LVL_ENEMY;
+          Value = LVL_BLANK;
           enemy *Enemy = &gEnemies[EnemyNum];
           EnemyNum++;
           *Enemy = {};  // zero everything
@@ -544,7 +561,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
           Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
         } else if (Symbol == 'p') {
-          Value = LVL_PLAYER;
+          Value = LVL_BLANK;
           player *Player = &gPlayers[0];
           if (Player->IsActive) {
             Player = &gPlayers[1];
@@ -749,7 +766,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
                  PressedRight, PressedFire, Turbo);
   }
 
-  // Process bricks
+  // Process and draw bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
     crushed_brick *Brick = &CrushedBricks[i];
     if (!Brick->IsUsed) {
@@ -811,6 +828,32 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
       Animation->Counter += 1;
     }
+  }
+
+  // Update and draw treasures
+  for (int i = 0; i < Level->TreasureCount; i++) {
+    treasure *Treasure = &gTreasures[i];
+
+    int BottomTile = CheckTile(Treasure->TileX,
+                               (Treasure->Y + Treasure->Height) / kTileHeight);
+
+    bool32 AcceptableMove =
+        BottomTile != LVL_BRICK && BottomTile != LVL_BRICK_HARD &&
+        BottomTile != LVL_LADDER && BottomTile != LVL_INVALID;
+
+    int Old = Treasure->Y;
+    Treasure->Y += 2;
+    if (!AcceptableMove) {
+      Treasure->Y = Old;
+    }
+
+    if (AcceptableMove) {
+      Treasure->TileY = Treasure->Y / kTileHeight;
+      DrawTile(Treasure->TileX, Treasure->TileY);
+      DrawTile(Treasure->TileX, Treasure->TileY + 1);
+    }
+
+    DrawSprite(Treasure->Position, kTileWidth, kTileHeight, 96, 96);
   }
 
   // Draw players
