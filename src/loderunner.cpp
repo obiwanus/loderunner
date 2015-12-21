@@ -833,6 +833,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update and draw treasures
   for (int i = 0; i < Level->TreasureCount; i++) {
     treasure *Treasure = &gTreasures[i];
+    int Speed = 4;  // divides kTileHeight, so no problems
 
     int BottomTile = CheckTile(Treasure->TileX,
                                (Treasure->Y + Treasure->Height) / kTileHeight);
@@ -841,19 +842,31 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         BottomTile != LVL_BRICK && BottomTile != LVL_BRICK_HARD &&
         BottomTile != LVL_LADDER && BottomTile != LVL_INVALID;
 
-    int Old = Treasure->Y;
-    Treasure->Y += 2;
-    if (!AcceptableMove) {
-      Treasure->Y = Old;
+    // Check if there's another treasure below - O(n2)
+    bool32 TreasureBelow = false;
+    for (int j = 0; j < Level->TreasureCount; j++) {
+      if (i == j) continue;
+      treasure *AnotherTreasure = &gTreasures[j];
+      if (Treasure->TileX != AnotherTreasure->TileX) continue;
+      int Bottom = Treasure->Y + Treasure->Height;
+      if (Bottom + Speed > AnotherTreasure->Y &&
+          Treasure->Y < AnotherTreasure->Y) {
+        TreasureBelow = true;
+        break;
+      }
     }
 
-    if (AcceptableMove) {
+    if (AcceptableMove && !TreasureBelow) {
+      Treasure->Y += Speed;
       Treasure->TileY = Treasure->Y / kTileHeight;
       DrawTile(Treasure->TileX, Treasure->TileY);
       DrawTile(Treasure->TileX, Treasure->TileY + 1);
     }
+  }
 
-    DrawSprite(Treasure->Position, kTileWidth, kTileHeight, 96, 96);
+  // Draw all treasures so they don't blink
+  for (int i = 0; i < Level->TreasureCount; i++) {
+    DrawSprite(gTreasures[i].Position, kTileWidth, kTileHeight, 96, 96);
   }
 
   // Draw players
