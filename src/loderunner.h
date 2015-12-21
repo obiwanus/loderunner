@@ -130,11 +130,6 @@ struct animation {
   frame Frames[5];
 };
 
-enum {
-  LEFT = 0,
-  RIGHT,
-};
-
 struct entity {
   union {
     v2i Position;
@@ -171,13 +166,18 @@ struct player : person {
   bool32 IsActive = false;
 };
 
+typedef enum {
+  NOWHERE = 0,
+  LEFT,
+  RIGHT,
+  UP,
+  DOWN,
+} direction;
+
 struct enemy : person {
-  enum {
-    LEFT = 1,
-    RIGHT,
-    UP,
-    DOWN,
-  } Direction;
+  direction DirectionX;
+  direction DirectionY;
+  int TargetCooldown;
 };
 
 struct treasure : entity {
@@ -206,6 +206,7 @@ struct crushed_brick : entity {
 struct level {
   int Width;
   int Height;
+  int PlayerCount;
   int EnemyCount;
   int TreasureCount;
   int Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
@@ -225,6 +226,7 @@ typedef enum {
   LVL_INVALID,
 } tile_type;
 
+// -----------------------------------------------------------
 // Platform functions
 
 #define DEBUG_PLATFORM_READ_ENTIRE_FILE(name) \

@@ -504,6 +504,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       } else if (Symbol != '\r') {
         Width += 1;
       }
+      if (Symbol == 'p') {
+        Level->PlayerCount++;
+      }
       if (Symbol == 'e') {
         Level->EnemyCount++;
       }
@@ -754,12 +757,57 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     int Speed = 2;
     int Turbo = false;
 
-    // Update Enemy
+    // Choose player to pursue
+    player *Player = NULL;
+    if (Level->PlayerCount > 1) {
+      player *Player1 = &gPlayers[0];
+      player *Player2 = &gPlayers[1];
 
-    bool32 PressedUp = Enemy->Direction == Enemy->UP;
-    bool32 PressedDown = Enemy->Direction == Enemy->DOWN;
-    bool32 PressedLeft = Enemy->Direction == Enemy->LEFT;
-    bool32 PressedRight = Enemy->Direction == Enemy->RIGHT;
+      if (Abs(Player1->TileX - Enemy->TileX) +
+              Abs(Player1->TileY - Enemy->TileY) <
+          Abs(Player2->TileX - Enemy->TileX) +
+              Abs(Player2->TileY - Enemy->TileY)) {
+        Player = Player1;
+      } else {
+        Player = Player2;
+      }
+    } else {
+      Player = &gPlayers[0];
+    }
+
+    if (Player->X == Enemy->X || Player->Y == Enemy->Y) {
+      // Retarget
+      Enemy->TargetCooldown = 0;
+    }
+
+
+    // Update Enemy
+    if (Enemy->TargetCooldown <= 0) {
+      Enemy->TargetCooldown = 60 * 1;  // 1 second
+      int DeltaX = Player->X - Enemy->X;
+      int DeltaY = Player->Y - Enemy->Y;
+      if (DeltaX < 0) {
+        Enemy->DirectionX = LEFT;
+      } else if (DeltaX > 0) {
+        Enemy->DirectionX = RIGHT;
+      } else {
+        Enemy->DirectionX = NOWHERE;
+      }
+      if (DeltaY < 0) {
+        Enemy->DirectionY = UP;
+      } else if (DeltaY > 0) {
+        Enemy->DirectionY = DOWN;
+      } else {
+        Enemy->DirectionY = NOWHERE;
+      }
+    }
+
+    Enemy->TargetCooldown--;
+
+    bool32 PressedUp = Enemy->DirectionY == UP;
+    bool32 PressedDown = Enemy->DirectionY == DOWN;
+    bool32 PressedLeft = Enemy->DirectionX == LEFT;
+    bool32 PressedRight = Enemy->DirectionX == RIGHT;
     bool32 PressedFire = false;
 
     UpdatePerson(Enemy, Speed, PressedUp, PressedDown, PressedLeft,
