@@ -160,6 +160,8 @@ struct person : entity {
 
   bool32 Animate;
   bool32 IsInitialized;
+  bool32 IsStuck;
+  bool32 WasStuck;
 };
 
 struct player : person {

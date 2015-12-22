@@ -315,6 +315,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Person->X += Speed;
     if (!AcceptableMove(Person)) {
       Person->X = Old;
+      Person->IsStuck = true;
     } else {
       if (!OnRope) {
         Person->Animation = &Person->GoingRight;
@@ -331,6 +332,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Person->X -= Speed;
     if (!AcceptableMove(Person)) {
       Person->X = Old;
+      Person->IsStuck = true;
     } else {
       if (!OnRope) {
         Person->Animation = &Person->GoingLeft;
@@ -755,6 +757,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Animate = false;
     int Speed = 2;
+    int kTargetCooldown = 3 * 60;
     int Turbo = false;
 
     // Choose player to pursue
@@ -775,33 +778,41 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player = &gPlayers[0];
     }
 
-    if (Player->X == Enemy->X || Player->Y == Enemy->Y) {
-      // Retarget
+    // Retarget if stuck or sees the player directly
+    if (Enemy->IsStuck || Player->X == Enemy->X || Player->Y == Enemy->Y) {
       Enemy->TargetCooldown = 0;
     }
 
+    // If stucks completely, try a different direction
+    if (Enemy->IsStuck && Enemy->WasStuck) {
+      Enemy->IsStuck = false;
+      Enemy->TargetCooldown = kTargetCooldown;
+      if (Enemy->DirectionX == LEFT) {
+        Enemy->DirectionX = RIGHT;
+      } else {
+        Enemy->DirectionX = LEFT;
+      }
+    }
 
     // Update Enemy
     if (Enemy->TargetCooldown <= 0) {
-      Enemy->TargetCooldown = 60 * 1;  // 1 second
+      Enemy->TargetCooldown = kTargetCooldown;
       int DeltaX = Player->X - Enemy->X;
       int DeltaY = Player->Y - Enemy->Y;
       if (DeltaX < 0) {
         Enemy->DirectionX = LEFT;
       } else if (DeltaX > 0) {
         Enemy->DirectionX = RIGHT;
-      } else {
-        Enemy->DirectionX = NOWHERE;
       }
       if (DeltaY < 0) {
         Enemy->DirectionY = UP;
       } else if (DeltaY > 0) {
         Enemy->DirectionY = DOWN;
-      } else {
-        Enemy->DirectionY = NOWHERE;
       }
     }
 
+    Enemy->WasStuck = Enemy->IsStuck;
+    Enemy->IsStuck = false;
     Enemy->TargetCooldown--;
 
     bool32 PressedUp = Enemy->DirectionY == UP;
