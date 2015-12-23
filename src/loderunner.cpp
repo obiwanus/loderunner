@@ -173,8 +173,8 @@ void DrawTile(int Col, int Row) {
     DrawSprite(Position, kTileWidth, kTileHeight, 128, 128);
   } else if (Value == LVL_TREASURE) {
     DrawSprite(Position, kTileWidth, kTileHeight, 96, 96);
-  } else if (Value == LVL_BLANK || Value == LVL_PLAYER ||
-             Value == LVL_ENEMY || Value == LVL_WIN_LADDER) {
+  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY ||
+             Value == LVL_WIN_LADDER) {
     DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
 }
@@ -257,37 +257,43 @@ bool32 AcceptableMove(entity *Entity) {
 void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
                   bool32 PressedDown, bool32 PressedLeft, bool32 PressedRight,
                   bool32 PressedFire, bool32 Turbo) {
-
   bool32 Animate = false;
 
-  // TODO: make the Person fall from the ladder only when he
-  // doesn't touch the ladder at all
-  bool32 OnLadder = CheckTile(Person->TileX, Person->TileY) == LVL_LADDER;
+  bool32 OnLadder = false;
+  {
+    int Left = (Person->X - Person->Width / 2) / kTileWidth;
+    int Right = (Person->X + Person->Width / 2) / kTileWidth;
+    int Top = (Person->Y - Person->Height / 2) / kTileHeight;
+    int Bottom = (Person->Y + Person->Height / 2) / kTileHeight;
+    OnLadder = (CheckTile(Left, Top) == LVL_LADDER ||
+                CheckTile(Right, Top) == LVL_LADDER ||
+                CheckTile(Left, Bottom) == LVL_LADDER ||
+                CheckTile(Right, Bottom) == LVL_LADDER);
+  }
 
   bool32 LadderBelow = false;
   {
     int Col = Person->TileX;
     int Row = Person->TileY + 1;
-    int PlayerBottom = (int)Person->Y + Person->Height / 2;
+    int PersonBottom = (int)Person->Y + Person->Height / 2;
     int TileTop = Row * kTileHeight;
     if (CheckTile(Col, Row) == LVL_LADDER) {
-      if (PlayerBottom >= TileTop) LadderBelow = true;
+      if (PersonBottom >= TileTop) LadderBelow = true;
     }
   }
 
-  bool32 CanClimb = false;
-  if (OnLadder || LadderBelow) {
+  Person->CanClimb = false;
+  if (OnLadder) {
     int LadderCenter = Person->TileX * kTileWidth + kTileWidth / 2;
-    int PlayerX = (int)Person->X;
-    CanClimb = Abs(PlayerX - LadderCenter) < (Person->Width / 3);
+    Person->CanClimb = Abs(Person->X - LadderCenter) < (Person->Width / 3);
   }
 
   bool32 OnRope = false;
   if (CheckTile(Person->TileX, Person->TileY) == LVL_ROPE) {
     int RopeY = Person->TileY * kTileHeight;
-    int PlayerTop = (int)Person->Y - Person->Height / 2;
-    OnRope = (PlayerTop == RopeY) ||
-             (RopeY - PlayerTop > 0 && RopeY - PlayerTop <= 3);
+    int PersonTop = Person->Y - Person->Height / 2;
+    OnRope = (PersonTop == RopeY) ||
+             (RopeY - PersonTop > 0 && RopeY - PersonTop <= 3);
     // Adjust Person on a rope
     if (OnRope) {
       Person->Y = RopeY + Person->Height / 2;
@@ -345,17 +351,17 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   }
 
   bool32 Climbing = false;
-  if (PressedUp && (CanClimb || Turbo)) {
+  if (PressedUp && (Person->CanClimb || Turbo)) {
     int Old = Person->Y;
     Person->Y -= Speed;
 
     // @refactor?
     int PlayerTile = CheckTile(Person->TileX, Person->TileY);
-    int PlayerBottom = (int)Person->Y + Person->Height / 2;
+    int PersonBottom = (int)Person->Y + Person->Height / 2;
 
     bool32 GotFlying = (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
                         PlayerTile == LVL_ROPE) &&
-                       (PlayerBottom < (Person->TileY + 1) * kTileHeight);
+                       (PersonBottom < (Person->TileY + 1) * kTileHeight);
 
     if (!AcceptableMove(Person) || GotFlying && !Turbo) {
       Person->Y = Old;
@@ -366,21 +372,27 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     }
   }
 
-  bool32 Descending = false;
-  if (PressedDown && (CanClimb || LadderBelow || OnRope || Turbo)) {
+  Person->CanDescend = false;
+  if (Person->CanClimb || LadderBelow || OnRope || Turbo) {
     int Old = Person->Y;
     Person->Y += Speed;
-    if (!AcceptableMove(Person)) {
-      Person->Y = Old;
-    } else if (LadderBelow || CanClimb) {
-      Descending = true;
-      Person->Animation = &Person->Climbing;
-      Animate = true;
+    if (AcceptableMove(Person)) {
+      Person->CanDescend = true;
     }
+    Person->Y = Old;
+  }
+
+  bool32 Descending = false;
+  if (PressedDown && Person->CanDescend) {
+    Person->Y += Speed;
+    Descending = true;
+    Person->Animation = &Person->Climbing;
+    Animate = true;
   }
 
   // Adjust Person on ladder
-  if (CanClimb && ((Climbing && PressedUp) || (Descending && PressedDown))) {
+  if (Person->CanClimb &&
+      ((Climbing && PressedUp) || (Descending && PressedDown))) {
     Person->X = Person->TileX * kTileWidth + kTileWidth / 2;
   }
 
@@ -521,7 +533,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // Allocate memory for enemies and treasures
     gEnemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level->EnemyCount);
-    gTreasures = (treasure *)GameMemoryAlloc(sizeof(treasure) * Level->TreasureCount);
+    gTreasures =
+        (treasure *)GameMemoryAlloc(sizeof(treasure) * Level->TreasureCount);
 
     // Read level data
     {
@@ -547,8 +560,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Treasure->Height = kTileHeight;
           Treasure->X = Treasure->TileX * kTileWidth;
           Treasure->Y = Treasure->TileY * kTileHeight;
-        }
-        else if (Symbol == '=')
+        } else if (Symbol == '=')
           Value = LVL_BRICK;
         else if (Symbol == '+')
           Value = LVL_BRICK_HARD;
@@ -757,10 +769,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Animate = false;
     int Speed = 2;
-    int kTargetCooldown = 3 * 60;
+    int kTargetCooldown = 2 * 60;
     int Turbo = false;
 
-    // Choose player to pursue
+    // Choose a player to pursue
     player *Player = NULL;
     if (Level->PlayerCount > 1) {
       player *Player1 = &gPlayers[0];
@@ -778,6 +790,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player = &gPlayers[0];
     }
 
+    // Retarget if pursue another player
+    if (Enemy->Pursuing != Player) {
+      Enemy->Pursuing = Player;
+      Enemy->TargetCooldown = 0;
+    }
+
     // Retarget if stuck or sees the player directly
     if (Enemy->IsStuck || Player->X == Enemy->X || Player->Y == Enemy->Y) {
       Enemy->TargetCooldown = 0;
@@ -787,27 +805,33 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (Enemy->IsStuck && Enemy->WasStuck) {
       Enemy->IsStuck = false;
       Enemy->TargetCooldown = kTargetCooldown;
-      if (Enemy->DirectionX == LEFT) {
-        Enemy->DirectionX = RIGHT;
+      if (Enemy->Direction == LEFT) {
+        Enemy->Direction = RIGHT;
       } else {
-        Enemy->DirectionX = LEFT;
+        Enemy->Direction = LEFT;
       }
     }
 
-    // Update Enemy
+    // If on a ladder, prefer to climb
+    if (Enemy->Direction != UP && Enemy->Direction != DOWN &&
+        (Enemy->CanClimb || Enemy->CanDescend)) {
+      Enemy->TargetCooldown = 0;
+    }
+
+    // Choose direction
     if (Enemy->TargetCooldown <= 0) {
       Enemy->TargetCooldown = kTargetCooldown;
       int DeltaX = Player->X - Enemy->X;
       int DeltaY = Player->Y - Enemy->Y;
       if (DeltaX < 0) {
-        Enemy->DirectionX = LEFT;
+        Enemy->Direction = LEFT;
       } else if (DeltaX > 0) {
-        Enemy->DirectionX = RIGHT;
+        Enemy->Direction = RIGHT;
       }
-      if (DeltaY < 0) {
-        Enemy->DirectionY = UP;
-      } else if (DeltaY > 0) {
-        Enemy->DirectionY = DOWN;
+      if (DeltaY < 0 && Enemy->CanClimb) {
+        Enemy->Direction = UP;
+      } else if (DeltaY > 0 && Enemy->CanDescend) {
+        Enemy->Direction = DOWN;
       }
     }
 
@@ -815,10 +839,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Enemy->IsStuck = false;
     Enemy->TargetCooldown--;
 
-    bool32 PressedUp = Enemy->DirectionY == UP;
-    bool32 PressedDown = Enemy->DirectionY == DOWN;
-    bool32 PressedLeft = Enemy->DirectionX == LEFT;
-    bool32 PressedRight = Enemy->DirectionX == RIGHT;
+    bool32 PressedUp = Enemy->Direction == UP;
+    bool32 PressedDown = Enemy->Direction == DOWN;
+    bool32 PressedLeft = Enemy->Direction == LEFT;
+    bool32 PressedRight = Enemy->Direction == RIGHT;
     bool32 PressedFire = false;
 
     UpdatePerson(Enemy, Speed, PressedUp, PressedDown, PressedLeft,

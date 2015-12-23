@@ -162,6 +162,8 @@ struct person : entity {
   bool32 IsInitialized;
   bool32 IsStuck;
   bool32 WasStuck;
+  bool32 CanClimb;
+  bool32 CanDescend;
 };
 
 struct player : person {
@@ -177,9 +179,9 @@ typedef enum {
 } direction;
 
 struct enemy : person {
-  direction DirectionX;
-  direction DirectionY;
+  direction Direction;
   int TargetCooldown;
+  player *Pursuing;
 };
 
 struct treasure : entity {
