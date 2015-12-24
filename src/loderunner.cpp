@@ -769,7 +769,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Animate = false;
     int Speed = 2;
-    int kTargetCooldown = 2 * 60;
+    int kTargetCooldown = 10 * 60;
     int Turbo = false;
 
     // Choose a player to pursue
