@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>  // usleep
+#include <time.h>
 #include <limits.h>
 
 #if BUILD_SLOW
@@ -46,6 +47,16 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   fclose(f);
 
   return Result;
+}
+
+internal u64 LinuxGetWallClock() {
+  u64 result = 0;
+  struct timespec spec;
+
+  clock_gettime(CLOCK_MONOTONIC, &spec);
+  result = spec.tv_nsec;  // ns
+
+  return result;
 }
 
 int main(int argc, char const *argv[]) {
@@ -171,7 +182,13 @@ int main(int argc, char const *argv[]) {
   game_input *NewInput = &Input[1];
   *NewInput = {};
 
+  // TODO: query monitor refresh rate
+  int target_fps = 60;
+  r32 target_nspf = 1.0e9f / (r32)target_fps;  // Target ms per frame
+
   GlobalRunning = true;
+
+  u64 last_timestamp = LinuxGetWallClock();
 
   while (GlobalRunning) {
     // Process events
@@ -202,6 +219,7 @@ int main(int argc, char const *argv[]) {
         if (nev.type == KeyPress && nev.xkey.time == event.xkey.time &&
             nev.xkey.keycode == event.xkey.keycode) {
           // Ignore. Key wasn't actually released
+          int a = 1;
         } else {
           released = true;
         }
@@ -211,17 +229,17 @@ int main(int argc, char const *argv[]) {
         if (key == XK_Escape) {
           GlobalRunning = false;
         } else if (key == XK_Left) {
-          Player2->Left.EndedDown = pressed;
+          Player1->Left.EndedDown = pressed;
         } else if (key == XK_Right) {
-          Player2->Right.EndedDown = pressed;
+          Player1->Right.EndedDown = pressed;
         } else if (key == XK_Up) {
-          Player2->Up.EndedDown = pressed;
+          Player1->Up.EndedDown = pressed;
         } else if (key == XK_Down) {
-          Player2->Down.EndedDown = pressed;
+          Player1->Down.EndedDown = pressed;
         } else if (key == XK_space) {
-          Player2->Fire.EndedDown = pressed;
+          Player1->Fire.EndedDown = pressed;
         } else if (symbol == 'x') {
-          Player2->Turbo.EndedDown = pressed;
+          Player1->Turbo.EndedDown = pressed;
         }
       }
 
@@ -254,7 +272,26 @@ int main(int argc, char const *argv[]) {
     XPutImage(display, window, gc, gXImage, 0, 0, 0, 0, kWindowWidth,
               kWindowHeight);
 
-    // TODO: limit FPS
+    // Limit FPS
+    {
+      u64 current_timestamp = LinuxGetWallClock();
+      u64 ns_elapsed = LinuxGetWallClock() - last_timestamp;
+
+      if (ns_elapsed < target_nspf) {
+        timespec ts;
+        ts.tv_sec = 0;
+        ts.tv_nsec = target_nspf - ns_elapsed;  // time to sleep
+        clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+
+        while (ns_elapsed < target_nspf) {
+          ns_elapsed = LinuxGetWallClock() - last_timestamp;
+        }
+      } else {
+        printf("Frame missed\n");
+      }
+
+      last_timestamp = LinuxGetWallClock();
+    }
   }
 
   XCloseDisplay(display);
