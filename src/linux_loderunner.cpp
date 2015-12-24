@@ -10,10 +10,6 @@
 #include <time.h>
 #include <limits.h>
 
-#if BUILD_SLOW
-#include <signal.h>
-#endif
-
 #include "loderunner.h"
 
 struct linux_game_code {
@@ -49,7 +45,7 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   return Result;
 }
 
-internal u64 LinuxGetWallClock() {
+inline u64 LinuxGetWallClock() {
   u64 result = 0;
   struct timespec spec;
 
@@ -211,17 +207,22 @@ int main(int argc, char const *argv[]) {
         }
         pressed = true;
       }
-      if (event.type == KeyRelease &&
-          XEventsQueued(display, QueuedAfterReading)) {
-        XEvent nev;
-        XPeekEvent(display, &nev);
+      if (event.type == KeyRelease) {
+        if (XEventsQueued(display, QueuedAfterReading)) {
+          XEvent nev;
+          XPeekEvent(display, &nev);
 
-        if (nev.type == KeyPress && nev.xkey.time == event.xkey.time &&
-            nev.xkey.keycode == event.xkey.keycode) {
-          // Ignore. Key wasn't actually released
-          int a = 1;
-        } else {
+          if (nev.type == KeyPress && nev.xkey.time == event.xkey.time &&
+              nev.xkey.keycode == event.xkey.keycode) {
+            // Ignore. Key wasn't actually released
+            printf("Key release ignored\n");
+          } else {
+            released = true;
+          }
+        }
+        else {
           released = true;
+          printf("Key released\n");
         }
       }
 
