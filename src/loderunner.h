@@ -181,7 +181,6 @@ typedef enum {
 struct enemy : person {
   direction Direction;
   int TargetCooldown;
-  player *Pursuing;
 };
 
 struct treasure : entity {
@@ -207,15 +206,6 @@ struct crushed_brick : entity {
 #define MAX_LEVEL_HEIGHT 100
 #define MAX_LEVEL_WIDTH 100
 
-struct level {
-  int Width;
-  int Height;
-  int PlayerCount;
-  int EnemyCount;
-  int TreasureCount;
-  int Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
-};
-
 typedef enum {
   LVL_BLANK,
   LVL_BLANK_TMP,
@@ -229,6 +219,15 @@ typedef enum {
   LVL_PLAYER,
   LVL_INVALID,
 } tile_type;
+
+struct level {
+  int Width;
+  int Height;
+  int PlayerCount;
+  int EnemyCount;
+  int TreasureCount;
+  tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
+};
 
 // -----------------------------------------------------------
 // Platform functions

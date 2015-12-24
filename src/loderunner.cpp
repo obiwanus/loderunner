@@ -140,7 +140,7 @@ internal void DrawSprite(v2i Position, int Width, int Height, int XOffset,
   }
 }
 
-bool32 CheckTile(int Col, int Row) {
+tile_type CheckTile(int Col, int Row) {
   if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
     return LVL_INVALID;
   }
@@ -260,15 +260,21 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   bool32 Animate = false;
 
   bool32 OnLadder = false;
+  int LadderTileX = 0;
   {
     int Left = (Person->X - Person->Width / 2) / kTileWidth;
     int Right = (Person->X + Person->Width / 2) / kTileWidth;
     int Top = (Person->Y - Person->Height / 2) / kTileHeight;
     int Bottom = (Person->Y + Person->Height / 2) / kTileHeight;
-    OnLadder = (CheckTile(Left, Top) == LVL_LADDER ||
-                CheckTile(Right, Top) == LVL_LADDER ||
-                CheckTile(Left, Bottom) == LVL_LADDER ||
-                CheckTile(Right, Bottom) == LVL_LADDER);
+    if (CheckTile(Left, Top) == LVL_LADDER ||
+        CheckTile(Left, Bottom) == LVL_LADDER) {
+      OnLadder = true;
+      LadderTileX = Left;
+    } else if (CheckTile(Right, Top) == LVL_LADDER ||
+               CheckTile(Right, Bottom) == LVL_LADDER) {
+      OnLadder = true;
+      LadderTileX = Right;
+    }
   }
 
   bool32 LadderBelow = false;
@@ -284,7 +290,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
 
   Person->CanClimb = false;
   if (OnLadder) {
-    int LadderCenter = Person->TileX * kTileWidth + kTileWidth / 2;
+    int LadderCenter = LadderTileX * kTileWidth + kTileWidth / 2;
     Person->CanClimb = Abs(Person->X - LadderCenter) < (Person->Width / 3);
   }
 
@@ -365,6 +371,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
 
     if (!AcceptableMove(Person) || GotFlying && !Turbo) {
       Person->Y = Old;
+      Person->IsStuck = true;
     } else {
       Climbing = true;
       Person->Animation = &Person->Climbing;
@@ -388,6 +395,8 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Descending = true;
     Person->Animation = &Person->Climbing;
     Animate = true;
+  } else if (PressedDown) {
+    Person->IsStuck = true;
   }
 
   // Adjust Person on ladder
@@ -484,6 +493,15 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   }
 }
 
+internal bool32 CanGoThroughTile(int TileX, int TileY) {
+  tile_type Tile = CheckTile(TileX, TileY);
+  if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_INVALID) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
@@ -545,7 +563,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
       for (int i = 0; i < FileReadResult.MemorySize; i++) {
         char Symbol = String[i];
-        int Value = LVL_BLANK;
+        tile_type Value = LVL_BLANK;
 
         if (Symbol == '|')
           Value = LVL_WIN_LADDER;
@@ -769,8 +787,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 Animate = false;
     int Speed = 2;
-    int kTargetCooldown = 10 * 60;
     int Turbo = false;
+    int kTargetCooldown = 20;
 
     // Choose a player to pursue
     player *Player = NULL;
@@ -790,54 +808,83 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player = &gPlayers[0];
     }
 
-    // Retarget if pursue another player
-    if (Enemy->Pursuing != Player) {
-      Enemy->Pursuing = Player;
-      Enemy->TargetCooldown = 0;
-    }
+    int DeltaX = Abs(Player->X - Enemy->X);
+    int DeltaY = Abs(Player->Y - Enemy->Y);
 
-    // Retarget if stuck or sees the player directly
-    if (Enemy->IsStuck || Player->X == Enemy->X || Player->Y == Enemy->Y) {
-      Enemy->TargetCooldown = 0;
-    }
-
-    // If stucks completely, try a different direction
-    if (Enemy->IsStuck && Enemy->WasStuck) {
-      Enemy->IsStuck = false;
-      Enemy->TargetCooldown = kTargetCooldown;
-      if (Enemy->Direction == LEFT) {
-        Enemy->Direction = RIGHT;
+    // If going nowhere
+    if (Enemy->Direction == NOWHERE) {
+      if (Player->X < Enemy->X) {
+        Enemy->Direction = LEFT;
       } else {
-        Enemy->Direction = LEFT;
-      }
-    }
-
-    // If on a ladder, prefer to climb
-    if (Enemy->Direction != UP && Enemy->Direction != DOWN &&
-        (Enemy->CanClimb || Enemy->CanDescend)) {
-      Enemy->TargetCooldown = 0;
-    }
-
-    // Choose direction
-    if (Enemy->TargetCooldown <= 0) {
-      Enemy->TargetCooldown = kTargetCooldown;
-      int DeltaX = Player->X - Enemy->X;
-      int DeltaY = Player->Y - Enemy->Y;
-      if (DeltaX < 0) {
-        Enemy->Direction = LEFT;
-      } else if (DeltaX > 0) {
         Enemy->Direction = RIGHT;
       }
-      if (DeltaY < 0 && Enemy->CanClimb) {
-        Enemy->Direction = UP;
-      } else if (DeltaY > 0 && Enemy->CanDescend) {
-        Enemy->Direction = DOWN;
+    }
+
+    // See if stuck
+    if (!Enemy->IsStuck) {
+      Enemy->IsStuck = (Enemy->Direction == UP && !Enemy->CanClimb) ||
+                       (Enemy->Direction == DOWN && !Enemy->CanDescend);
+    }
+
+    if (Enemy->TargetCooldown <= 0) {
+      // If going horizontally
+      if (Enemy->Direction == LEFT || Enemy->Direction == RIGHT) {
+        bool32 GoingTowardsPlayer =
+            (Player->X < Enemy->X && Enemy->Direction == LEFT) ||
+            (Player->X > Enemy->X && Enemy->Direction == RIGHT);
+        int Vector = Enemy->Direction == LEFT ? -1 : 1;
+        bool32 FacingWall =
+            !CanGoThroughTile(Enemy->TileX + Vector, Enemy->TileY) ||
+            !CanGoThroughTile(Enemy->TileX + Vector * 2, Enemy->TileY) ||
+            !CanGoThroughTile(Enemy->TileX + Vector * 3, Enemy->TileY);
+        if (Enemy->IsStuck) {
+          // If stuck, try the opposite direction
+          Enemy->IsStuck = false;
+          if (Enemy->Direction == LEFT) {
+            Enemy->Direction = RIGHT;
+          } else {
+            Enemy->Direction = LEFT;
+          }
+          Enemy->TargetCooldown = kTargetCooldown;
+        } else if (Enemy->CanClimb && Player->Y <= Enemy->Y) {
+          if (!GoingTowardsPlayer || DeltaY > DeltaX || FacingWall) {
+            Enemy->Direction = UP;
+          }
+        } else if (Enemy->CanDescend && Player->Y >= Enemy->Y) {
+          if (!GoingTowardsPlayer || DeltaY > DeltaX || FacingWall) {
+            Enemy->Direction = DOWN;
+          }
+        }
+      }
+
+      // If going vertically
+      if (Enemy->Direction == UP || Enemy->Direction == DOWN) {
+        if (Enemy->IsStuck) {
+          Enemy->IsStuck = false;
+          if (Player->X < Enemy->X) {
+            Enemy->Direction = LEFT;
+          } else {
+            Enemy->Direction = RIGHT;
+          }
+          Enemy->TargetCooldown = kTargetCooldown;
+        }
       }
     }
 
-    Enemy->WasStuck = Enemy->IsStuck;
+    // If fell and nowhere to go
+    if (!Enemy->CanClimb && !Enemy->CanDescend &&
+        !CanGoThroughTile(Enemy->TileX - 1, Enemy->TileY) &&
+        !CanGoThroughTile(Enemy->TileX + 1, Enemy->TileY)) {
+      // Stand and wait
+      Enemy->Direction = NOWHERE;
+    }
+
+    if (Enemy->TargetCooldown > 0) {
+      Enemy->TargetCooldown--;
+    }
+
+    Enemy->WasStuck = Enemy->IsStuck;  // @remove?
     Enemy->IsStuck = false;
-    Enemy->TargetCooldown--;
 
     bool32 PressedUp = Enemy->Direction == UP;
     bool32 PressedDown = Enemy->Direction == DOWN;
