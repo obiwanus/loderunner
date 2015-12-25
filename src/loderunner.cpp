@@ -788,7 +788,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 Animate = false;
     int Speed = 2;
     int Turbo = false;
-    int kTargetCooldown = 20;
 
     // Choose a player to pursue
     player *Player = NULL;
@@ -808,9 +807,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Player = &gPlayers[0];
     }
 
-    int DeltaX = Abs(Player->X - Enemy->X);
-    int DeltaY = Abs(Player->Y - Enemy->Y);
-
     // If going nowhere
     if (Enemy->Direction == NOWHERE) {
       if (Player->X < Enemy->X) {
@@ -826,47 +822,29 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
                        (Enemy->Direction == DOWN && !Enemy->CanDescend);
     }
 
-    if (Enemy->TargetCooldown <= 0) {
-      // If going horizontally
-      if (Enemy->Direction == LEFT || Enemy->Direction == RIGHT) {
-        bool32 GoingTowardsPlayer =
-            (Player->X < Enemy->X && Enemy->Direction == LEFT) ||
-            (Player->X > Enemy->X && Enemy->Direction == RIGHT);
-        int Vector = Enemy->Direction == LEFT ? -1 : 1;
-        bool32 FacingWall =
-            !CanGoThroughTile(Enemy->TileX + Vector, Enemy->TileY) ||
-            !CanGoThroughTile(Enemy->TileX + Vector * 2, Enemy->TileY) ||
-            !CanGoThroughTile(Enemy->TileX + Vector * 3, Enemy->TileY);
-        if (Enemy->IsStuck) {
-          // If stuck, try the opposite direction
-          Enemy->IsStuck = false;
-          if (Enemy->Direction == LEFT) {
-            Enemy->Direction = RIGHT;
-          } else {
-            Enemy->Direction = LEFT;
-          }
-          Enemy->TargetCooldown = kTargetCooldown;
-        } else if (Enemy->CanClimb && Player->Y <= Enemy->Y) {
-          if (!GoingTowardsPlayer || DeltaY > DeltaX || FacingWall) {
-            Enemy->Direction = UP;
-          }
-        } else if (Enemy->CanDescend && Player->Y >= Enemy->Y) {
-          if (!GoingTowardsPlayer || DeltaY > DeltaX || FacingWall) {
-            Enemy->Direction = DOWN;
-          }
+    // If going horizontally
+    if (Enemy->Direction == LEFT || Enemy->Direction == RIGHT) {
+      if (Enemy->IsStuck) {
+        // If stuck, try the opposite direction
+        if (Enemy->Direction == LEFT) {
+          Enemy->Direction = RIGHT;
+        } else {
+          Enemy->Direction = LEFT;
         }
+      } else if (Enemy->CanClimb && Player->Y < Enemy->Y) {
+        Enemy->Direction = UP;
+      } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
+        Enemy->Direction = DOWN;
       }
+    }
 
-      // If going vertically
-      if (Enemy->Direction == UP || Enemy->Direction == DOWN) {
-        if (Enemy->IsStuck) {
-          Enemy->IsStuck = false;
-          if (Player->X < Enemy->X) {
-            Enemy->Direction = LEFT;
-          } else {
-            Enemy->Direction = RIGHT;
-          }
-          Enemy->TargetCooldown = kTargetCooldown;
+    // If going vertically
+    if (Enemy->Direction == UP || Enemy->Direction == DOWN) {
+      if (Enemy->IsStuck) {
+        if (Player->X < Enemy->X) {
+          Enemy->Direction = LEFT;
+        } else {
+          Enemy->Direction = RIGHT;
         }
       }
     }
@@ -879,11 +857,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->Direction = NOWHERE;
     }
 
-    if (Enemy->TargetCooldown > 0) {
-      Enemy->TargetCooldown--;
-    }
-
-    Enemy->WasStuck = Enemy->IsStuck;  // @remove?
     Enemy->IsStuck = false;
 
     bool32 PressedUp = Enemy->Direction == UP;

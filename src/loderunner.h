@@ -180,7 +180,7 @@ typedef enum {
 
 struct enemy : person {
   direction Direction;
-  int TargetCooldown;
+  int PathCooldown;
 };
 
 struct treasure : entity {
