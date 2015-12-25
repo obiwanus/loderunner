@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "loderunner_platform.h"
 #include "loderunner_math.h"
@@ -178,9 +179,15 @@ typedef enum {
   DOWN,
 } direction;
 
+#define MAX_PATH_LENGTH 100
+
 struct enemy : person {
   direction Direction;
+  player *Pursuing;
   int PathCooldown;
+  bool32 PathFound;
+  v2i Path[MAX_PATH_LENGTH];
+  int PathLength;
 };
 
 struct treasure : entity {
@@ -220,6 +227,12 @@ typedef enum {
   LVL_INVALID,
 } tile_type;
 
+typedef enum {
+  WATERMAP_NOT_VISITED = 0,
+  WATERMAP_OBSTACLE,
+  WATERMAP_WATER,
+} water_point;
+
 struct level {
   int Width;
   int Height;
@@ -227,6 +240,8 @@ struct level {
   int EnemyCount;
   int TreasureCount;
   tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
+  water_point WaterMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
+  int DirectionMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
 };
 
 // -----------------------------------------------------------

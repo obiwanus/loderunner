@@ -129,6 +129,18 @@ inline v2i &operator-=(v2i &A, v2i B) {
   return A;
 }
 
+inline bool32 operator==(v2i &A, v2i B) {
+  bool32 Result = (A.x == B.x && A.y == B.y);
+
+  return Result;
+}
+
+inline bool32 operator!=(v2i &A, v2i B) {
+  bool32 Result = (A.x != B.x || A.y != B.y);
+
+  return Result;
+}
+
 // Unary
 inline v2i operator-(v2i A) {
   v2i Result;

@@ -214,6 +214,15 @@ internal bmp_file *LoadSprite(char const *Filename) {
   return Result;
 }
 
+internal bool32 CanGoThroughTile(int TileX, int TileY) {
+  tile_type Tile = CheckTile(TileX, TileY);
+  if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_INVALID) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 bool32 AcceptableMove(entity *Entity) {
   // Tells whether the player can be legitimately
   // placed in its position
@@ -252,6 +261,134 @@ bool32 AcceptableMove(entity *Entity) {
     }
   }
   return true;
+}
+
+inline void SetWMapPoint(int Col, int Row, water_point Point) {
+  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+    Assert(0);
+    return;
+  }
+  Level->WaterMap[Row][Col] = Point;
+}
+
+inline water_point CheckWMapPoint(int Col, int Row) {
+  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+    return WATERMAP_OBSTACLE;
+  }
+  return Level->WaterMap[Row][Col];
+}
+
+inline void SetDMapPoint(int Col, int Row, int X, int Y) {
+  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+    Assert(0);
+    return;
+  }
+  int Value = Y * Level->Width + X;
+  Level->DirectionMap[Row][Col] = Value;
+}
+
+#define DM_TARGET -1
+#define FRONTIER_MAX_SIZE 500
+
+void FindPath(enemy *Enemy, player *Player) {
+  Enemy->PathFound = false;
+
+  // NOTE: -1 works with memset, but -2 would not
+  memset(Level->DirectionMap, -1, sizeof(Level->DirectionMap));
+  memset(Level->WaterMap, 0, sizeof(Level->WaterMap));
+
+  Level->DirectionMap[Player->TileY][Player->TileX] = DM_TARGET;
+
+  // Pre-fill watermap with obstacles
+  for (int Row = 0; Row < Level->Height; Row++) {
+    for (int Col = 0; Col < Level->Width; Col++) {
+      if (!CanGoThroughTile(Col, Row)) {
+        SetWMapPoint(Col, Row, WATERMAP_OBSTACLE);
+      }
+    }
+  }
+  Level->WaterMap[Player->TileY][Player->TileX] = WATERMAP_WATER;
+
+  int Iteration = 0;
+  while (Iteration++ < MAX_PATH_LENGTH) {
+
+    for (int Row = 0; Row < Level->Height; Row++) {
+      for (int Col = 0; Col < Level->Width; Col++) {
+        if (CheckWMapPoint(Col, Row) != WATERMAP_WATER) continue;
+
+        int X = Col;
+        int Y = Row;
+
+        if (X == Enemy->TileX && Y == Enemy->TileY) {
+          Enemy->PathFound = true;
+          break;
+        }
+
+        // Point above
+        X = Col;
+        Y = Row - 1;
+        if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
+          if (CanGoThroughTile(X, Y)) {
+            SetWMapPoint(X, Y, WATERMAP_WATER);
+            SetDMapPoint(X, Y, Col, Row);
+          }
+        }
+
+        // Point below
+        X = Col;
+        Y = Row + 1;
+        if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
+          if (CheckTile(X, Y) == LVL_LADDER) {
+            SetWMapPoint(X, Y, WATERMAP_WATER);
+            SetDMapPoint(X, Y, Col, Row);
+          }
+        }
+
+        // Point on the left
+        X = Col - 1;
+        Y = Row;
+        if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
+          if ((CanGoThroughTile(X, Y) && (!CanGoThroughTile(X, Y + 1) ||
+                                          CheckTile(X, Y + 1) == LVL_LADDER)) ||
+              CheckTile(X, Y) == LVL_ROPE) {
+            SetWMapPoint(X, Y, WATERMAP_WATER);
+            SetDMapPoint(X, Y, Col, Row);
+          }
+        }
+
+        // Point on the right
+        X = Col + 1;
+        Y = Row;
+        if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
+          if ((CanGoThroughTile(X, Y) && (!CanGoThroughTile(X, Y + 1) ||
+                                          CheckTile(X, Y + 1) == LVL_LADDER)) ||
+              CheckTile(X, Y) == LVL_ROPE) {
+            SetWMapPoint(X, Y, WATERMAP_WATER);
+            SetDMapPoint(X, Y, Col, Row);
+          }
+        }
+      }
+    }
+
+    if (Enemy->PathFound) break;
+  }
+
+  // Build path if found
+  if (Enemy->PathFound) {
+    int X = Enemy->TileX;
+    int Y = Enemy->TileY;
+    for (int i = 0; i < MAX_PATH_LENGTH; i++) {
+      int NextStep = Level->DirectionMap[Y][X];
+      X = NextStep % Level->Width;
+      Y = NextStep / Level->Width;
+      Enemy->Path[i].x = X;
+      Enemy->Path[i].y = Y;
+      if (X == Player->TileX && Y == Player->TileY) {
+        Enemy->PathLength = i + 1;
+        break;
+      }
+    }
+  }
 }
 
 void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
@@ -490,15 +627,6 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     for (int Col = Person->TileX - 1; Col <= Person->TileX + 1; Col++) {
       DrawTile(Col, Row);
     }
-  }
-}
-
-internal bool32 CanGoThroughTile(int TileX, int TileY) {
-  tile_type Tile = CheckTile(TileX, TileY);
-  if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_INVALID) {
-    return false;
-  } else {
-    return true;
   }
 }
 
@@ -788,24 +916,40 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 Animate = false;
     int Speed = 2;
     int Turbo = false;
+    int kPathCooldown = 60;
 
-    // Choose a player to pursue
-    player *Player = NULL;
-    if (Level->PlayerCount > 1) {
-      player *Player1 = &gPlayers[0];
-      player *Player2 = &gPlayers[1];
-
-      if (Abs(Player1->TileX - Enemy->TileX) +
-              Abs(Player1->TileY - Enemy->TileY) <
-          Abs(Player2->TileX - Enemy->TileX) +
-              Abs(Player2->TileY - Enemy->TileY)) {
-        Player = Player1;
-      } else {
-        Player = Player2;
+    // @debug
+    if (Enemy->PathFound) {
+      for (int j = 0; j < Enemy->PathLength; j++) {
+        DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
       }
-    } else {
-      Player = &gPlayers[0];
     }
+
+    player *Player = Enemy->Pursuing;
+    // if (Player == NULL || Enemy->PathCooldown <= 0) {
+      // Choose a player to pursue
+      if (Level->PlayerCount > 1) {
+        player *Player1 = &gPlayers[0];
+        player *Player2 = &gPlayers[1];
+
+        if (Abs(Player1->TileX - Enemy->TileX) +
+                Abs(Player1->TileY - Enemy->TileY) <
+            Abs(Player2->TileX - Enemy->TileX) +
+                Abs(Player2->TileY - Enemy->TileY)) {
+          Player = Player1;
+        } else {
+          Player = Player2;
+        }
+      } else {
+        Player = &gPlayers[0];
+      }
+      Enemy->Pursuing = Player;
+
+      FindPath(Enemy, Player);
+      Enemy->PathCooldown = kPathCooldown;
+    // }
+
+    // Enemy->PathCooldown--;
 
     // If going nowhere
     if (Enemy->Direction == NOWHERE) {
@@ -1027,5 +1171,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     v2i Position = {Enemy->X - Enemy->Width / 2, Enemy->Y - Enemy->Height / 2};
     DrawSprite(Position, Enemy->Width, Enemy->Height, Frame->XOffset,
                Frame->YOffset);
+
+    // Draw path
+    if (Enemy->PathFound) {
+      for (int j = 0; j < Enemy->PathLength - 1; j++) {
+        v2i PointPosition;
+        PointPosition.x = Enemy->Path[j].x * kTileWidth;
+        PointPosition.y = Enemy->Path[j].y * kTileHeight;
+        DrawRectangle(PointPosition, kTileWidth, kTileHeight, 0x00333333);
+      }
+    }
   }
 }
