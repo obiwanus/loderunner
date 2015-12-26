@@ -173,8 +173,7 @@ void DrawTile(int Col, int Row) {
     DrawSprite(Position, kTileWidth, kTileHeight, 128, 128);
   } else if (Value == LVL_TREASURE) {
     DrawSprite(Position, kTileWidth, kTileHeight, 96, 96);
-  } else if (Value == LVL_BLANK || Value == LVL_PLAYER || Value == LVL_ENEMY ||
-             Value == LVL_WIN_LADDER) {
+  } else {
     DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
 }
@@ -348,8 +347,10 @@ void FindPath(enemy *Enemy, player *Player) {
         X = Col - 1;
         Y = Row;
         if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
-          if ((CanGoThroughTile(X, Y) && (!CanGoThroughTile(X, Y + 1) ||
-                                          CheckTile(X, Y + 1) == LVL_LADDER)) ||
+          if ((CanGoThroughTile(X, Y) &&
+               (!CanGoThroughTile(X, Y + 1) ||
+                CheckTile(X, Y + 1) == LVL_LADDER ||
+                CheckTile(X, Y + 1) == LVL_BLANK_TMP)) ||
               CheckTile(X, Y) == LVL_ROPE) {
             SetWMapPoint(X, Y, WATERMAP_WATER);
             SetDMapPoint(X, Y, Col, Row);
@@ -360,8 +361,10 @@ void FindPath(enemy *Enemy, player *Player) {
         X = Col + 1;
         Y = Row;
         if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
-          if ((CanGoThroughTile(X, Y) && (!CanGoThroughTile(X, Y + 1) ||
-                                          CheckTile(X, Y + 1) == LVL_LADDER)) ||
+          if ((CanGoThroughTile(X, Y) &&
+               (!CanGoThroughTile(X, Y + 1) ||
+                CheckTile(X, Y + 1) == LVL_LADDER ||
+                CheckTile(X, Y + 1) == LVL_BLANK_TMP)) ||
               CheckTile(X, Y) == LVL_ROPE) {
             SetWMapPoint(X, Y, WATERMAP_WATER);
             SetDMapPoint(X, Y, Col, Row);
@@ -583,7 +586,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
       Person->X += AdjustPersonX;
 
       // Crush the brick
-      Level->Contents[TileY][TileX] = LVL_BLANK;
+      Level->Contents[TileY][TileX] = LVL_BLANK_TMP;
       DrawTile(TileX, TileY);
       Person->FireCooldown = 30;
 
@@ -916,17 +919,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 Animate = false;
     int Speed = 2;
     int Turbo = false;
-    int kPathCooldown = 60;
-
-    // @debug
-    if (Enemy->PathFound) {
-      for (int j = 0; j < Enemy->PathLength; j++) {
-        DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
-      }
-    }
+    int kPathCooldown = 30;
 
     player *Player = Enemy->Pursuing;
-    // if (Player == NULL || Enemy->PathCooldown <= 0) {
+    if (Player == NULL || Enemy->PathCooldown <= 0) {
+      // @debug
+      if (Enemy->PathFound) {
+        for (int j = 0; j < Enemy->PathLength; j++) {
+          DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
+        }
+      }
       // Choose a player to pursue
       if (Level->PlayerCount > 1) {
         player *Player1 = &gPlayers[0];
@@ -947,9 +949,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
       FindPath(Enemy, Player);
       Enemy->PathCooldown = kPathCooldown;
-    // }
+    }
 
-    // Enemy->PathCooldown--;
+    Enemy->PathCooldown--;
 
     // If going nowhere
     if (Enemy->Direction == NOWHERE) {
@@ -1116,6 +1118,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     DrawSprite(gTreasures[i].Position, kTileWidth, kTileHeight, 96, 96);
   }
 
+  // @debug
+  for (int i = 0; i < Level->EnemyCount; i++) {
+    enemy *Enemy = &gEnemies[i];
+
+    if (Enemy->PathFound) {
+      for (int j = 0; j < Enemy->PathLength - 1; j++) {
+        v2i PointPosition;
+        PointPosition.x = Enemy->Path[j].x * kTileWidth;
+        PointPosition.y = Enemy->Path[j].y * kTileHeight;
+        DrawRectangle(PointPosition, kTileWidth, kTileHeight, 0x00333333);
+      }
+    }
+  }
+
   // Draw players
   for (int p = 0; p < 2; p++) {
     // We're drawing them in a separate loop so they don't
@@ -1171,15 +1187,5 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     v2i Position = {Enemy->X - Enemy->Width / 2, Enemy->Y - Enemy->Height / 2};
     DrawSprite(Position, Enemy->Width, Enemy->Height, Frame->XOffset,
                Frame->YOffset);
-
-    // Draw path
-    if (Enemy->PathFound) {
-      for (int j = 0; j < Enemy->PathLength - 1; j++) {
-        v2i PointPosition;
-        PointPosition.x = Enemy->Path[j].x * kTileWidth;
-        PointPosition.y = Enemy->Path[j].y * kTileHeight;
-        DrawRectangle(PointPosition, kTileWidth, kTileHeight, 0x00333333);
-      }
-    }
   }
 }
