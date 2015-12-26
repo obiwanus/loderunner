@@ -182,11 +182,13 @@ typedef enum {
 #define MAX_PATH_LENGTH 100
 
 struct enemy : person {
-  direction Direction;
+  direction DirectionX;
+  direction DirectionY;
   player *Pursuing;
   int PathCooldown;
   bool32 PathFound;
   v2i Path[MAX_PATH_LENGTH];
+  int PathPointIndex;
   int PathLength;
 };
 

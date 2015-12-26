@@ -291,6 +291,7 @@ inline void SetDMapPoint(int Col, int Row, int X, int Y) {
 
 void FindPath(enemy *Enemy, player *Player) {
   Enemy->PathFound = false;
+  Enemy->PathPointIndex = 0;
 
   // NOTE: -1 works with memset, but -2 would not
   memset(Level->DirectionMap, -1, sizeof(Level->DirectionMap));
@@ -953,46 +954,82 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     Enemy->PathCooldown--;
 
-    // If going nowhere
-    if (Enemy->Direction == NOWHERE) {
-      if (Player->X < Enemy->X) {
-        Enemy->Direction = LEFT;
+    if (Enemy->PathFound) {
+      v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
+      int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
+      int TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
+
+      // If reached the point
+      if (TargetX == Enemy->X && TargetY == Enemy->Y) {
+        Enemy->PathPointIndex++;
+        NextPoint = Enemy->Path[Enemy->PathPointIndex];
+        TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
+        TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
+      }
+
+      int DeltaX = TargetX - Enemy->X;
+      int DeltaY = TargetY - Enemy->Y;
+
+      if (DeltaX > 0) {
+        Enemy->DirectionX = RIGHT;
       } else {
-        Enemy->Direction = RIGHT;
+        Enemy->DirectionX = LEFT;
       }
-    }
-
-    // See if stuck
-    if (!Enemy->IsStuck) {
-      Enemy->IsStuck = (Enemy->Direction == UP && !Enemy->CanClimb) ||
-                       (Enemy->Direction == DOWN && !Enemy->CanDescend);
-    }
-
-    // If going horizontally
-    if (Enemy->Direction == LEFT || Enemy->Direction == RIGHT) {
-      if (Enemy->IsStuck) {
-        // If stuck, try the opposite direction
-        if (Enemy->Direction == LEFT) {
-          Enemy->Direction = RIGHT;
-        } else {
-          Enemy->Direction = LEFT;
-        }
-      } else if (Enemy->CanClimb && Player->Y < Enemy->Y) {
-        Enemy->Direction = UP;
-      } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
-        Enemy->Direction = DOWN;
+      if (DeltaY > 0) {
+        Enemy->DirectionY = DOWN;
+      } else {
+        Enemy->DirectionY = UP;
       }
-    }
 
-    // If going vertically
-    if (Enemy->Direction == UP || Enemy->Direction == DOWN) {
-      if (Enemy->IsStuck) {
-        if (Player->X < Enemy->X) {
-          Enemy->Direction = LEFT;
-        } else {
-          Enemy->Direction = RIGHT;
-        }
+      if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER &&
+          Abs(DeltaY) <= 1 && Abs(DeltaX) > 2) {
+        Enemy->DirectionY = NOWHERE;
       }
+
+    } else {
+      // Play dumb
+
+      // If going nowhere
+      // if (Enemy->Direction == NOWHERE) {
+      //   if (Player->X < Enemy->X) {
+      //     Enemy->Direction = LEFT;
+      //   } else {
+      //     Enemy->Direction = RIGHT;
+      //   }
+      // }
+
+      // // See if stuck
+      // if (!Enemy->IsStuck) {
+      //   Enemy->IsStuck = (Enemy->Direction == UP && !Enemy->CanClimb) ||
+      //                    (Enemy->Direction == DOWN && !Enemy->CanDescend);
+      // }
+
+      // // If going horizontally
+      // if (Enemy->Direction == LEFT || Enemy->Direction == RIGHT) {
+      //   if (Enemy->IsStuck) {
+      //     // If stuck, try the opposite direction
+      //     if (Enemy->Direction == LEFT) {
+      //       Enemy->Direction = RIGHT;
+      //     } else {
+      //       Enemy->Direction = LEFT;
+      //     }
+      //   } else if (Enemy->CanClimb && Player->Y < Enemy->Y) {
+      //     Enemy->Direction = UP;
+      //   } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
+      //     Enemy->Direction = DOWN;
+      //   }
+      // }
+
+      // // If going vertically
+      // if (Enemy->Direction == UP || Enemy->Direction == DOWN) {
+      //   if (Enemy->IsStuck) {
+      //     if (Player->X < Enemy->X) {
+      //       Enemy->Direction = LEFT;
+      //     } else {
+      //       Enemy->Direction = RIGHT;
+      //     }
+      //   }
+      // }
     }
 
     // If fell and nowhere to go
@@ -1000,15 +1037,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         !CanGoThroughTile(Enemy->TileX - 1, Enemy->TileY) &&
         !CanGoThroughTile(Enemy->TileX + 1, Enemy->TileY)) {
       // Stand and wait
-      Enemy->Direction = NOWHERE;
+      Enemy->DirectionX = NOWHERE;
+      Enemy->DirectionY = NOWHERE;
     }
 
     Enemy->IsStuck = false;
 
-    bool32 PressedUp = Enemy->Direction == UP;
-    bool32 PressedDown = Enemy->Direction == DOWN;
-    bool32 PressedLeft = Enemy->Direction == LEFT;
-    bool32 PressedRight = Enemy->Direction == RIGHT;
+    bool32 PressedUp = Enemy->DirectionY == UP;
+    bool32 PressedDown = Enemy->DirectionY == DOWN;
+    bool32 PressedLeft = Enemy->DirectionX == LEFT;
+    bool32 PressedRight = Enemy->DirectionX == RIGHT;
     bool32 PressedFire = false;
 
     UpdatePerson(Enemy, Speed, PressedUp, PressedDown, PressedLeft,
@@ -1187,5 +1225,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     v2i Position = {Enemy->X - Enemy->Width / 2, Enemy->Y - Enemy->Height / 2};
     DrawSprite(Position, Enemy->Width, Enemy->Height, Frame->XOffset,
                Frame->YOffset);
+
+    // @debug
+    if (Enemy->PathFound) {
+      v2i Pos = Enemy->Path[Enemy->PathPointIndex];
+      Pos.x = Pos.x * kTileWidth + kTileWidth / 2 - 2;
+      Pos.y = Pos.y * kTileHeight + kTileHeight / 2 - 2;
+      DrawRectangle(Pos, 4, 4, 0x00FF0000);
+    }
   }
 }
