@@ -10,7 +10,7 @@ global treasure *gTreasures;
 global level *Level;
 global bmp_file *gImage;
 
-global bool32 gDrawDebug = false;
+global bool32 gDebug = false;
 
 global int kTileWidth = 32;
 global int kTileHeight = 32;
@@ -222,23 +222,23 @@ internal bool32 CanGoThroughTile(int TileX, int TileY) {
   }
 }
 
-bool32 AcceptableMove(entity *Entity) {
+bool32 AcceptableMove(person *Person) {
   // Tells whether the player can be legitimately
   // placed in its position
 
-  int EntityLeft = (int)Entity->X - Entity->Width / 2;
-  int EntityRight = (int)Entity->X + Entity->Width / 2;
-  int EntityTop = (int)Entity->Y - Entity->Height / 2;
-  int EntityBottom = (int)Entity->Y + Entity->Height / 2;
+  int PersonLeft = (int)Person->X - Person->Width / 2;
+  int PersonRight = (int)Person->X + Person->Width / 2;
+  int PersonTop = (int)Person->Y - Person->Height / 2;
+  int PersonBottom = (int)Person->Y + Person->Height / 2;
 
   // Don't go away from the level
-  if (EntityLeft < 0 || EntityTop < 0 ||
-      EntityRight > Level->Width * kTileWidth ||
-      EntityBottom > Level->Height * kTileHeight)
+  if (PersonLeft < 0 || PersonTop < 0 ||
+      PersonRight > Level->Width * kTileWidth ||
+      PersonBottom > Level->Height * kTileHeight)
     return false;
 
-  int TileX = ((int)Entity->X + Entity->Width / 2) / kTileWidth;
-  int TileY = ((int)Entity->Y + Entity->Width / 2) / kTileHeight;
+  int TileX = ((int)Person->X + Person->Width / 2) / kTileWidth;
+  int TileY = ((int)Person->Y + Person->Width / 2) / kTileHeight;
   int StartCol = (TileX <= 0) ? 0 : TileX - 1;
   int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
   int StartRow = (TileY <= 0) ? 0 : TileY - 1;
@@ -254,11 +254,27 @@ bool32 AcceptableMove(entity *Entity) {
       int TileRight = (Col + 1) * kTileWidth;
       int TileTop = Row * kTileHeight;
       int TileBottom = (Row + 1) * kTileHeight;
-      if (EntityRight > TileLeft && EntityLeft < TileRight &&
-          EntityBottom > TileTop && EntityTop < TileBottom)
+      if (PersonRight > TileLeft && PersonLeft < TileRight &&
+          PersonBottom > TileTop && PersonTop < TileBottom)
         return false;
     }
   }
+
+  // Check for collisions with enemies
+  for (int i = 0; i < Level->EnemyCount; i++) {
+    enemy *Enemy = &gEnemies[i];
+    if (Enemy == (enemy *)Person) continue;
+    int EnemyLeft = Enemy->X - Enemy->Width / 2;
+    int EnemyRight = Enemy->X + Enemy->Width / 2;
+    int EnemyTop = Enemy->Y - Enemy->Height / 2;
+    int EnemyBottom = Enemy->Y + Enemy->Height / 2;
+    if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
+        PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
+      Person->Bump = true;
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -468,7 +484,6 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Person->X += Speed;
     if (!AcceptableMove(Person)) {
       Person->X = Old;
-      Person->IsStuck = true;
     } else {
       if (!OnRope) {
         Person->Animation = &Person->GoingRight;
@@ -485,7 +500,6 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Person->X -= Speed;
     if (!AcceptableMove(Person)) {
       Person->X = Old;
-      Person->IsStuck = true;
     } else {
       if (!OnRope) {
         Person->Animation = &Person->GoingLeft;
@@ -512,7 +526,6 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
 
     if (!AcceptableMove(Person) || GotFlying && !Turbo) {
       Person->Y = Old;
-      Person->IsStuck = true;
     } else {
       Climbing = true;
       Person->Animation = &Person->Climbing;
@@ -536,8 +549,6 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Descending = true;
     Person->Animation = &Person->Climbing;
     Animate = true;
-  } else if (PressedDown) {
-    Person->IsStuck = true;
   }
 
   // Adjust Person on ladder
@@ -891,10 +902,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Update player
     player_input *Input = &NewInput->Players[i];
 
-    if (Input->Debug.EndedDown) {
-      gDrawDebug = !gDrawDebug;
-    }
-
     bool32 PressedUp = Input->Up.EndedDown;
     bool32 PressedDown = Input->Down.EndedDown;
     bool32 PressedLeft = Input->Left.EndedDown;
@@ -924,10 +931,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     player *Player = Enemy->Pursuing;
     if (Player == NULL || Enemy->PathCooldown <= 0) {
-      // @debug
-      if (Enemy->PathFound) {
-        for (int j = 0; j < Enemy->PathLength; j++) {
-          DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
+      if (gDebug) {
+        if (Enemy->PathFound) {
+          for (int j = 0; j < Enemy->PathLength; j++) {
+            DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
+          }
         }
       }
       // Choose a player to pursue
@@ -954,7 +962,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     Enemy->PathCooldown--;
 
-    if (Enemy->PathFound) {
+    if (Enemy->Bump) {
+      Enemy->BumpCooldown = 60;
+    }
+
+    if (Enemy->PathFound && Enemy->BumpCooldown <= 0) {
       v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
       int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
       int TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
@@ -987,58 +999,54 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
 
     } else {
-      // Play dumb
-
-      // If going nowhere
-      // if (Enemy->Direction == NOWHERE) {
-      //   if (Player->X < Enemy->X) {
-      //     Enemy->Direction = LEFT;
-      //   } else {
-      //     Enemy->Direction = RIGHT;
-      //   }
-      // }
-
-      // // See if stuck
-      // if (!Enemy->IsStuck) {
-      //   Enemy->IsStuck = (Enemy->Direction == UP && !Enemy->CanClimb) ||
-      //                    (Enemy->Direction == DOWN && !Enemy->CanDescend);
-      // }
 
       // // If going horizontally
-      // if (Enemy->Direction == LEFT || Enemy->Direction == RIGHT) {
-      //   if (Enemy->IsStuck) {
-      //     // If stuck, try the opposite direction
-      //     if (Enemy->Direction == LEFT) {
-      //       Enemy->Direction = RIGHT;
-      //     } else {
-      //       Enemy->Direction = LEFT;
-      //     }
-      //   } else if (Enemy->CanClimb && Player->Y < Enemy->Y) {
-      //     Enemy->Direction = UP;
-      //   } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
-      //     Enemy->Direction = DOWN;
-      //   }
-      // }
+      if (Enemy->DirectionX == LEFT || Enemy->DirectionX == RIGHT) {
+        if (Enemy->Bump) {
+          // If bumped, try the opposite direction
+          if (Enemy->DirectionX == LEFT) {
+            Enemy->DirectionX = RIGHT;
+          } else {
+            Enemy->DirectionX = LEFT;
+          }
+        } else if (Enemy->CanClimb && Player->Y < Enemy->Y) {
+          Enemy->DirectionY = UP;
+        } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
+          Enemy->DirectionY = DOWN;
+        }
+      }
 
-      // // If going vertically
-      // if (Enemy->Direction == UP || Enemy->Direction == DOWN) {
-      //   if (Enemy->IsStuck) {
-      //     if (Player->X < Enemy->X) {
-      //       Enemy->Direction = LEFT;
-      //     } else {
-      //       Enemy->Direction = RIGHT;
-      //     }
-      //   }
-      // }
+      // If going vertically
+      if (Enemy->DirectionY == UP || Enemy->DirectionY == DOWN) {
+        if (Enemy->Bump) {
+          if (Player->X < Enemy->X) {
+            Enemy->DirectionX = LEFT;
+          } else {
+            Enemy->DirectionX = RIGHT;
+          }
+        }
+      }
+    }
+
+    Enemy->Bump = false;
+    if (Enemy->BumpCooldown > 0) {
+      Enemy->BumpCooldown--;
     }
 
     // If fell and nowhere to go
     if (!Enemy->CanClimb && !Enemy->CanDescend &&
         !CanGoThroughTile(Enemy->TileX - 1, Enemy->TileY) &&
         !CanGoThroughTile(Enemy->TileX + 1, Enemy->TileY)) {
+
       // Stand and wait
       Enemy->DirectionX = NOWHERE;
       Enemy->DirectionY = NOWHERE;
+    }
+
+    // Adjust in a player made hole
+    if (Enemy->IsFalling &&
+        CheckTile(Enemy->TileX, Enemy->TileY + 1) == LVL_BLANK_TMP) {
+      Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
     }
 
     Enemy->IsStuck = false;
@@ -1156,16 +1164,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     DrawSprite(gTreasures[i].Position, kTileWidth, kTileHeight, 96, 96);
   }
 
-  // @debug
-  for (int i = 0; i < Level->EnemyCount; i++) {
-    enemy *Enemy = &gEnemies[i];
+  if (gDebug) {
+    for (int i = 0; i < Level->EnemyCount; i++) {
+      enemy *Enemy = &gEnemies[i];
 
-    if (Enemy->PathFound) {
-      for (int j = 0; j < Enemy->PathLength - 1; j++) {
-        v2i PointPosition;
-        PointPosition.x = Enemy->Path[j].x * kTileWidth;
-        PointPosition.y = Enemy->Path[j].y * kTileHeight;
-        DrawRectangle(PointPosition, kTileWidth, kTileHeight, 0x00333333);
+      if (Enemy->PathFound) {
+        for (int j = 0; j < Enemy->PathLength - 1; j++) {
+          v2i PointPosition;
+          PointPosition.x = Enemy->Path[j].x * kTileWidth;
+          PointPosition.y = Enemy->Path[j].y * kTileHeight;
+          DrawRectangle(PointPosition, kTileWidth, kTileHeight, 0x00333333);
+        }
       }
     }
   }
@@ -1192,7 +1201,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     // Debug
-    if (gDrawDebug) {
+    if (gDebug) {
       v2i TilePosition = {};
       TilePosition.x = Player->TileX * kTileWidth;
       TilePosition.y = Player->TileY * kTileWidth;
@@ -1226,12 +1235,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     DrawSprite(Position, Enemy->Width, Enemy->Height, Frame->XOffset,
                Frame->YOffset);
 
-    // @debug
-    if (Enemy->PathFound) {
-      v2i Pos = Enemy->Path[Enemy->PathPointIndex];
-      Pos.x = Pos.x * kTileWidth + kTileWidth / 2 - 2;
-      Pos.y = Pos.y * kTileHeight + kTileHeight / 2 - 2;
-      DrawRectangle(Pos, 4, 4, 0x00FF0000);
+    if (gDebug) {
+      if (Enemy->PathFound) {
+        v2i Pos = Enemy->Path[Enemy->PathPointIndex];
+        Pos.x = Pos.x * kTileWidth + kTileWidth / 2 - 2;
+        Pos.y = Pos.y * kTileHeight + kTileHeight / 2 - 2;
+        DrawRectangle(Pos, 4, 4, 0x00FF0000);
+      }
     }
   }
 }

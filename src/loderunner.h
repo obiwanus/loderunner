@@ -162,7 +162,7 @@ struct person : entity {
   bool32 Animate;
   bool32 IsInitialized;
   bool32 IsStuck;
-  bool32 WasStuck;
+  bool32 Bump;
   bool32 CanClimb;
   bool32 CanDescend;
 };
@@ -190,6 +190,7 @@ struct enemy : person {
   v2i Path[MAX_PATH_LENGTH];
   int PathPointIndex;
   int PathLength;
+  int BumpCooldown;
 };
 
 struct treasure : entity {
