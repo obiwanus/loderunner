@@ -131,6 +131,14 @@ struct animation {
   frame Frames[5];
 };
 
+typedef enum {
+  NOWHERE = 0,
+  LEFT,
+  RIGHT,
+  UP,
+  DOWN,
+} direction;
+
 struct entity {
   union {
     v2i Position;
@@ -161,36 +169,29 @@ struct person : entity {
 
   bool32 Animate;
   bool32 IsInitialized;
-  bool32 IsStuck;
   bool32 Bump;
+  int BumpCooldown;
   bool32 CanClimb;
   bool32 CanDescend;
+
+  direction Going;
+  direction DirectionX;
+  direction DirectionY;
 };
 
 struct player : person {
   bool32 IsActive = false;
 };
 
-typedef enum {
-  NOWHERE = 0,
-  LEFT,
-  RIGHT,
-  UP,
-  DOWN,
-} direction;
-
 #define MAX_PATH_LENGTH 100
 
 struct enemy : person {
-  direction DirectionX;
-  direction DirectionY;
   player *Pursuing;
   int PathCooldown;
   bool32 PathFound;
   v2i Path[MAX_PATH_LENGTH];
   int PathPointIndex;
   int PathLength;
-  int BumpCooldown;
 };
 
 struct treasure : entity {

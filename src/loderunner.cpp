@@ -260,21 +260,6 @@ bool32 AcceptableMove(person *Person) {
     }
   }
 
-  // Check for collisions with enemies
-  for (int i = 0; i < Level->EnemyCount; i++) {
-    enemy *Enemy = &gEnemies[i];
-    if (Enemy == (enemy *)Person) continue;
-    int EnemyLeft = Enemy->X - Enemy->Width / 2;
-    int EnemyRight = Enemy->X + Enemy->Width / 2;
-    int EnemyTop = Enemy->Y - Enemy->Height / 2;
-    int EnemyBottom = Enemy->Y + Enemy->Height / 2;
-    if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
-        PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
-      Person->Bump = true;
-      return false;
-    }
-  }
-
   return true;
 }
 
@@ -416,6 +401,9 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
                   bool32 PressedFire, bool32 Turbo) {
   bool32 Animate = false;
 
+  int OldX = Person->X;
+  int OldY = Person->Y;
+
   bool32 OnLadder = false;
   int LadderTileX = 0;
   {
@@ -551,10 +539,60 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
     Animate = true;
   }
 
+  // Get the direction the person is going in
+  {
+    Person->Going = NOWHERE;
+
+    int DeltaX = Person->X - OldX;
+    int DeltaY = Person->Y - OldY;
+
+    if (Abs(DeltaX) >= Abs(DeltaY)) {
+      Person->Going = DeltaX > 0 ? RIGHT : LEFT;
+    } else {
+      Person->Going = DeltaY > 0 ? DOWN : UP;
+    }
+  }
+
   // Adjust Person on ladder
   if (Person->CanClimb &&
       ((Climbing && PressedUp) || (Descending && PressedDown))) {
     Person->X = Person->TileX * kTileWidth + kTileWidth / 2;
+  }
+
+  // Check for collisions with enemies
+  if (Person->BumpCooldown <= 0) {
+    int PersonLeft = Person->X - Person->Width / 2;
+    int PersonRight = Person->X + Person->Width / 2;
+    int PersonTop = Person->Y - Person->Height / 2;
+    int PersonBottom = Person->Y + Person->Height / 2;
+
+    for (int i = 0; i < Level->EnemyCount; i++) {
+      enemy *Enemy = &gEnemies[i];
+      if (Enemy == (enemy *)Person) continue;
+      int EnemyLeft = Enemy->X - Enemy->Width / 2;
+      int EnemyRight = Enemy->X + Enemy->Width / 2;
+      int EnemyTop = Enemy->Y - Enemy->Height / 2;
+      int EnemyBottom = Enemy->Y + Enemy->Height / 2;
+      if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
+          PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
+
+        Person->Bump = true;
+        Enemy->Bump = true;
+
+        Person->DirectionX = NOWHERE;
+        Person->DirectionY = NOWHERE;
+
+        if (Person->Going == LEFT) {
+          Person->DirectionX = RIGHT;
+        } else if (Person->Going == RIGHT) {
+          Person->DirectionX = LEFT;
+        } else if (Person->Going == UP) {
+          Person->DirectionY = DOWN;
+        } else if (Person->Going == DOWN) {
+          Person->DirectionY = UP;
+        }
+      }
+    }
   }
 
   Person->Animate =
@@ -963,7 +1001,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Enemy->PathCooldown--;
 
     if (Enemy->Bump) {
-      Enemy->BumpCooldown = 60;
+      Enemy->BumpCooldown = 30;
     }
 
     if (Enemy->PathFound && Enemy->BumpCooldown <= 0) {
@@ -1001,15 +1039,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     } else {
 
       // // If going horizontally
-      if (Enemy->DirectionX == LEFT || Enemy->DirectionX == RIGHT) {
-        if (Enemy->Bump) {
-          // If bumped, try the opposite direction
-          if (Enemy->DirectionX == LEFT) {
-            Enemy->DirectionX = RIGHT;
-          } else {
-            Enemy->DirectionX = LEFT;
-          }
-        } else if (Enemy->CanClimb && Player->Y < Enemy->Y) {
+      if (Enemy->Going == LEFT || Enemy->Going == RIGHT) {
+        if (Enemy->CanClimb && Player->Y < Enemy->Y) {
           Enemy->DirectionY = UP;
         } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
           Enemy->DirectionY = DOWN;
@@ -1017,13 +1048,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
 
       // If going vertically
-      if (Enemy->DirectionY == UP || Enemy->DirectionY == DOWN) {
-        if (Enemy->Bump) {
-          if (Player->X < Enemy->X) {
-            Enemy->DirectionX = LEFT;
-          } else {
-            Enemy->DirectionX = RIGHT;
-          }
+      if (Enemy->Going == UP || Enemy->Going == DOWN) {
+        if (Player->X < Enemy->X) {
+          Enemy->DirectionX = LEFT;
+        } else {
+          Enemy->DirectionX = RIGHT;
         }
       }
     }
@@ -1043,13 +1072,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->DirectionY = NOWHERE;
     }
 
-    // Adjust in a player made hole
+    // Adjust in a player-made hole
     if (Enemy->IsFalling &&
         CheckTile(Enemy->TileX, Enemy->TileY + 1) == LVL_BLANK_TMP) {
       Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
     }
-
-    Enemy->IsStuck = false;
 
     bool32 PressedUp = Enemy->DirectionY == UP;
     bool32 PressedDown = Enemy->DirectionY == DOWN;
