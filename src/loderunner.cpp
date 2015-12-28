@@ -260,6 +260,19 @@ bool32 AcceptableMove(person *Person) {
     }
   }
 
+  for (int i = 0; i < Level->EnemyCount; i++) {
+    enemy *Enemy = &gEnemies[i];
+    if (Enemy == (enemy *)Person) continue;
+    int EnemyLeft = Enemy->X - Enemy->Width / 2;
+    int EnemyRight = Enemy->X + Enemy->Width / 2;
+    int EnemyTop = Enemy->Y - Enemy->Height / 2;
+    int EnemyBottom = Enemy->Y + Enemy->Height / 2;
+    if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
+        PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -561,35 +574,44 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
 
   // Check for collisions with enemies
   if (Person->BumpCooldown <= 0) {
-    int PersonLeft = Person->X - Person->Width / 2;
-    int PersonRight = Person->X + Person->Width / 2;
+    // Use a larger bounding rect
+    const int kRectAdjust = 4;
+
+    int PersonLeft = Person->X - Person->Width / 2 - kRectAdjust;
+    int PersonRight = Person->X + Person->Width / 2 + kRectAdjust;
     int PersonTop = Person->Y - Person->Height / 2;
     int PersonBottom = Person->Y + Person->Height / 2;
 
     for (int i = 0; i < Level->EnemyCount; i++) {
       enemy *Enemy = &gEnemies[i];
       if (Enemy == (enemy *)Person) continue;
-      int EnemyLeft = Enemy->X - Enemy->Width / 2;
-      int EnemyRight = Enemy->X + Enemy->Width / 2;
+      int EnemyLeft = Enemy->X - Enemy->Width / 2 - kRectAdjust;
+      int EnemyRight = Enemy->X + Enemy->Width / 2 + kRectAdjust;
       int EnemyTop = Enemy->Y - Enemy->Height / 2;
       int EnemyBottom = Enemy->Y + Enemy->Height / 2;
       if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
           PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
 
         Person->Bump = true;
+        Person->BumpCooldown = 40;
         Enemy->Bump = true;
+        Enemy->BumpCooldown = 20;
 
-        Person->DirectionX = NOWHERE;
-        Person->DirectionY = NOWHERE;
-
-        if (Person->Going == LEFT) {
-          Person->DirectionX = RIGHT;
-        } else if (Person->Going == RIGHT) {
+        // Send in different directions
+        if (Person->X < Enemy->X) {
           Person->DirectionX = LEFT;
-        } else if (Person->Going == UP) {
-          Person->DirectionY = DOWN;
-        } else if (Person->Going == DOWN) {
+          Enemy->DirectionX = RIGHT;
+        } else if (Person->X > Enemy->X) {
+          Person->DirectionX = RIGHT;
+          Enemy->DirectionX = LEFT;
+        }
+
+        if (Person->Y < Enemy->Y) {
           Person->DirectionY = UP;
+          Enemy->DirectionY = DOWN;
+        } else if (Person->Y > Enemy->Y) {
+          Person->DirectionY = DOWN;
+          Enemy->DirectionY = UP;
         }
       }
     }
@@ -1000,10 +1022,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     Enemy->PathCooldown--;
 
-    if (Enemy->Bump) {
-      Enemy->BumpCooldown = 30;
-    }
-
     if (Enemy->PathFound && Enemy->BumpCooldown <= 0) {
       v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
       int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
@@ -1036,25 +1054,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Enemy->DirectionY = NOWHERE;
       }
 
-    } else {
-
-      // // If going horizontally
-      if (Enemy->Going == LEFT || Enemy->Going == RIGHT) {
-        if (Enemy->CanClimb && Player->Y < Enemy->Y) {
-          Enemy->DirectionY = UP;
-        } else if (Enemy->CanDescend && Player->Y > Enemy->Y) {
-          Enemy->DirectionY = DOWN;
-        }
-      }
-
-      // If going vertically
-      if (Enemy->Going == UP || Enemy->Going == DOWN) {
-        if (Player->X < Enemy->X) {
-          Enemy->DirectionX = LEFT;
-        } else {
-          Enemy->DirectionX = RIGHT;
-        }
-      }
     }
 
     Enemy->Bump = false;
@@ -1072,7 +1071,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->DirectionY = NOWHERE;
     }
 
-    // Adjust in a player-made hole
+    // Adjust in a player-made pit
     if (Enemy->IsFalling &&
         CheckTile(Enemy->TileX, Enemy->TileY + 1) == LVL_BLANK_TMP) {
       Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
