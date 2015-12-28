@@ -473,6 +473,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
   }
 
   // Gravity
+  bool32 WasFalling = Person->IsFalling;
   Person->IsFalling = false;
   {
     int Old = Person->Y;
@@ -485,6 +486,16 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       Person->IsFalling = true;
       Animate = true;
       Person->Animation = &Person->Falling;
+    }
+  }
+
+  // Adjust in a player-made pit
+  if (Person->IsFalling && !WasFalling) {
+    for (int i = Person->TileY + 1; i < Level->Height; i++) {
+      if (CheckTile(Person->TileX, i) == LVL_BLANK_TMP) {
+        Person->X = Person->TileX * kTileWidth + kTileWidth / 2;
+        break;
+      }
     }
   }
 
@@ -1074,12 +1085,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       // Stand and wait
       Enemy->DirectionX = NOWHERE;
       Enemy->DirectionY = NOWHERE;
-    }
-
-    // Adjust in a player-made pit
-    if (Enemy->IsFalling &&
-        CheckTile(Enemy->TileX, Enemy->TileY + 1) == LVL_BLANK_TMP) {
-      Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
     }
 
     bool32 PressedUp = Enemy->DirectionY == UP;
