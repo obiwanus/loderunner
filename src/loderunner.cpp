@@ -222,7 +222,7 @@ internal bool32 CanGoThroughTile(int TileX, int TileY) {
   }
 }
 
-bool32 AcceptableMove(person *Person) {
+bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
   // Tells whether the player can be legitimately
   // placed in its position
 
@@ -260,6 +260,7 @@ bool32 AcceptableMove(person *Person) {
     }
   }
 
+  // Collisions with enemies
   for (int i = 0; i < Level->EnemyCount; i++) {
     enemy *Enemy = &gEnemies[i];
     if (Enemy == (enemy *)Person) continue;
@@ -269,6 +270,14 @@ bool32 AcceptableMove(person *Person) {
     int EnemyBottom = Enemy->Y + Enemy->Height / 2;
     if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
         PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
+      return false;
+    }
+  }
+
+  if (IsEnemy) {
+    // Do not fall through player-made pits
+    if (CheckTile(Person->TileX, Person->TileY) == LVL_BLANK_TMP &&
+        PersonBottom > (Person->TileY + 1) * kTileWidth) {
       return false;
     }
   }
@@ -325,7 +334,6 @@ void FindPath(enemy *Enemy, player *Player) {
 
   int Iteration = 0;
   while (Iteration++ < MAX_PATH_LENGTH) {
-
     for (int Row = 0; Row < Level->Height; Row++) {
       for (int Col = 0; Col < Level->Width; Col++) {
         if (CheckWMapPoint(Col, Row) != WATERMAP_WATER) continue;
@@ -409,7 +417,7 @@ void FindPath(enemy *Enemy, player *Player) {
   }
 }
 
-void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
+void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
                   bool32 PressedDown, bool32 PressedLeft, bool32 PressedRight,
                   bool32 PressedFire, bool32 Turbo) {
   bool32 Animate = false;
@@ -469,7 +477,8 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   {
     int Old = Person->Y;
     Person->Y += Speed;
-    if (!AcceptableMove(Person) || OnLadder || LadderBelow || Turbo || OnRope) {
+    if (!AcceptableMove(Person, IsEnemy) || OnLadder || LadderBelow || Turbo ||
+        OnRope) {
       Person->Y = Old;
       Person->IsFalling = false;
     } else {
@@ -483,7 +492,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   if (PressedRight && (!Person->IsFalling || Turbo)) {
     int Old = Person->X;
     Person->X += Speed;
-    if (!AcceptableMove(Person)) {
+    if (!AcceptableMove(Person, IsEnemy)) {
       Person->X = Old;
     } else {
       if (!OnRope) {
@@ -499,7 +508,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   if (PressedLeft && (!Person->IsFalling || Turbo)) {
     int Old = Person->X;
     Person->X -= Speed;
-    if (!AcceptableMove(Person)) {
+    if (!AcceptableMove(Person, IsEnemy)) {
       Person->X = Old;
     } else {
       if (!OnRope) {
@@ -525,7 +534,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
                         PlayerTile == LVL_ROPE) &&
                        (PersonBottom < (Person->TileY + 1) * kTileHeight);
 
-    if (!AcceptableMove(Person) || GotFlying && !Turbo) {
+    if (!AcceptableMove(Person, IsEnemy) || GotFlying && !Turbo) {
       Person->Y = Old;
     } else {
       Climbing = true;
@@ -538,7 +547,7 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
   if (Person->CanClimb || LadderBelow || OnRope || Turbo) {
     int Old = Person->Y;
     Person->Y += Speed;
-    if (AcceptableMove(Person)) {
+    if (AcceptableMove(Person, IsEnemy)) {
       Person->CanDescend = true;
     }
     Person->Y = Old;
@@ -591,7 +600,6 @@ void UpdatePerson(person *Person, int Speed, bool32 PressedUp,
       int EnemyBottom = Enemy->Y + Enemy->Height / 2;
       if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
           PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
-
         Person->Bump = true;
         Person->BumpCooldown = 40;
         Enemy->Bump = true;
@@ -718,7 +726,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Init level
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
-    char const *Filename = "levels/level_1.txt";
+    char const *Filename = "levels/level1.txt";
     file_read_result FileReadResult =
         GameMemory->DEBUGPlatformReadEntireFile(Filename);
 
@@ -976,7 +984,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 #endif
 
-    UpdatePerson(Player, Speed, PressedUp, PressedDown, PressedLeft,
+    bool32 IsEnemy = false;
+    UpdatePerson(Player, IsEnemy, Speed, PressedUp, PressedDown, PressedLeft,
                  PressedRight, PressedFire, Turbo);
   }
 
@@ -1053,7 +1062,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Abs(DeltaY) <= 1 && Abs(DeltaX) > 2) {
         Enemy->DirectionY = NOWHERE;
       }
-
     }
 
     Enemy->Bump = false;
@@ -1062,10 +1070,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     // If fell and nowhere to go
-    if (!Enemy->CanClimb && !Enemy->CanDescend &&
-        !CanGoThroughTile(Enemy->TileX - 1, Enemy->TileY) &&
-        !CanGoThroughTile(Enemy->TileX + 1, Enemy->TileY)) {
-
+    if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_BLANK_TMP) {
       // Stand and wait
       Enemy->DirectionX = NOWHERE;
       Enemy->DirectionY = NOWHERE;
@@ -1083,7 +1088,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedRight = Enemy->DirectionX == RIGHT;
     bool32 PressedFire = false;
 
-    UpdatePerson(Enemy, Speed, PressedUp, PressedDown, PressedLeft,
+    bool32 IsEnemy = true;
+    UpdatePerson(Enemy, IsEnemy, Speed, PressedUp, PressedDown, PressedLeft,
                  PressedRight, PressedFire, Turbo);
   }
 
