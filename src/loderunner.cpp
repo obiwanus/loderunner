@@ -350,7 +350,7 @@ void FindPath(enemy *Enemy, player *Player) {
         X = Col;
         Y = Row - 1;
         if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
-          if (CanGoThroughTile(X, Y)) {
+          if (CanGoThroughTile(X, Y) && CheckTile(X, Y) != LVL_BLANK_TMP) {
             SetWMapPoint(X, Y, WATERMAP_WATER);
             SetDMapPoint(X, Y, Col, Row);
           }
