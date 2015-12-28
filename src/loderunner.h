@@ -188,7 +188,7 @@ struct player : person {
 struct enemy : person {
   player *Pursuing;
   int PathCooldown;
-  bool32 PathFound;
+  bool32 PathExists;
   v2i Path[MAX_PATH_LENGTH];
   int PathPointIndex;
   int PathLength;

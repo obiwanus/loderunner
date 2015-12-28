@@ -313,8 +313,6 @@ inline void SetDMapPoint(int Col, int Row, int X, int Y) {
 #define FRONTIER_MAX_SIZE 500
 
 void FindPath(enemy *Enemy, player *Player) {
-  Enemy->PathFound = false;
-  Enemy->PathPointIndex = 0;
 
   // NOTE: -1 works with memset, but -2 would not
   memset(Level->DirectionMap, -1, sizeof(Level->DirectionMap));
@@ -332,6 +330,7 @@ void FindPath(enemy *Enemy, player *Player) {
   }
   Level->WaterMap[Player->TileY][Player->TileX] = WATERMAP_WATER;
 
+  bool32 NewPathFound = false;
   int Iteration = 0;
   while (Iteration++ < MAX_PATH_LENGTH) {
     for (int Row = 0; Row < Level->Height; Row++) {
@@ -342,7 +341,7 @@ void FindPath(enemy *Enemy, player *Player) {
         int Y = Row;
 
         if (X == Enemy->TileX && Y == Enemy->TileY) {
-          Enemy->PathFound = true;
+          NewPathFound = true;
           break;
         }
 
@@ -396,11 +395,15 @@ void FindPath(enemy *Enemy, player *Player) {
       }
     }
 
-    if (Enemy->PathFound) break;
+    if (NewPathFound) {
+      Enemy->PathExists = true;
+      Enemy->PathPointIndex = 0;
+      break;
+    }
   }
 
   // Build path if found
-  if (Enemy->PathFound) {
+  if (NewPathFound) {
     int X = Enemy->TileX;
     int Y = Enemy->TileY;
     for (int i = 0; i < MAX_PATH_LENGTH; i++) {
@@ -1012,7 +1015,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     player *Player = Enemy->Pursuing;
     if (Player == NULL || Enemy->PathCooldown <= 0) {
       if (gDebug) {
-        if (Enemy->PathFound) {
+        if (Enemy->PathExists) {
           for (int j = 0; j < Enemy->PathLength; j++) {
             DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
           }
@@ -1042,17 +1045,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     Enemy->PathCooldown--;
 
-    if (Enemy->PathFound && Enemy->BumpCooldown <= 0) {
+    if (Enemy->PathExists && Enemy->BumpCooldown <= 0) {
       v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
       int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
       int TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
 
       // If reached the point
-      if (TargetX == Enemy->X && TargetY == Enemy->Y) {
+      if (Abs(TargetX - Enemy->X) <= 4 && Abs(TargetY - Enemy->Y) <= 1) {
         Enemy->PathPointIndex++;
         NextPoint = Enemy->Path[Enemy->PathPointIndex];
         TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
         TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
+      }
+
+      // If reached the end of the path
+      if (Enemy->PathPointIndex >= Enemy->PathLength - 1) {
+        Enemy->PathExists = false;
       }
 
       int DeltaX = TargetX - Enemy->X;
@@ -1205,7 +1213,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     for (int i = 0; i < Level->EnemyCount; i++) {
       enemy *Enemy = &gEnemies[i];
 
-      if (Enemy->PathFound) {
+      if (Enemy->PathExists) {
         for (int j = 0; j < Enemy->PathLength - 1; j++) {
           v2i PointPosition;
           PointPosition.x = Enemy->Path[j].x * kTileWidth;
@@ -1273,7 +1281,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
                Frame->YOffset);
 
     if (gDebug) {
-      if (Enemy->PathFound) {
+      if (Enemy->PathExists) {
         v2i Pos = Enemy->Path[Enemy->PathPointIndex];
         Pos.x = Pos.x * kTileWidth + kTileWidth / 2 - 2;
         Pos.y = Pos.y * kTileHeight + kTileHeight / 2 - 2;
