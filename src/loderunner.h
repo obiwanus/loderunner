@@ -157,6 +157,7 @@ struct person : entity {
   int Facing;
   int FireCooldown;
   int IsFalling;
+  bool32 IsDead;
 
   // Animation
   animation *Animation;
@@ -226,8 +227,7 @@ typedef enum {
   LVL_WIN_LADDER,
   LVL_ROPE,
   LVL_TREASURE,
-  LVL_ENEMY,
-  LVL_PLAYER,
+  LVL_RESPAWN,
   LVL_INVALID,
 } tile_type;
 

@@ -6,7 +6,13 @@ global game_memory *GameMemory;
 
 global player gPlayers[2];
 global enemy *gEnemies;
+
 global treasure *gTreasures;
+
+global v2i gRespawns[4];
+global int gRespawnCount;
+global int gRespawnIndex;
+
 global level *Level;
 global bmp_file *gImage;
 
@@ -171,8 +177,6 @@ void DrawTile(int Col, int Row) {
     DrawSprite(Position, kTileWidth, kTileHeight, 96, 128);
   } else if (Value == LVL_ROPE) {
     DrawSprite(Position, kTileWidth, kTileHeight, 128, 128);
-  } else if (Value == LVL_TREASURE) {
-    DrawSprite(Position, kTileWidth, kTileHeight, 96, 96);
   } else {
     DrawRectangle(Position, kTileWidth, kTileHeight, 0x000A0D0B);
   }
@@ -313,7 +317,6 @@ inline void SetDMapPoint(int Col, int Row, int X, int Y) {
 #define FRONTIER_MAX_SIZE 500
 
 void FindPath(enemy *Enemy, player *Player) {
-
   // NOTE: -1 works with memset, but -2 would not
   memset(Level->DirectionMap, -1, sizeof(Level->DirectionMap));
   memset(Level->WaterMap, 0, sizeof(Level->WaterMap));
@@ -565,8 +568,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     int PlayerTile = CheckTile(Person->TileX, Person->TileY);
     int PersonBottom = (int)Person->Y + Person->Height / 2;
 
-    bool32 GotFlying = (PlayerTile == LVL_BLANK || PlayerTile == LVL_TREASURE ||
-                        PlayerTile == LVL_ROPE) &&
+    bool32 GotFlying = (PlayerTile == LVL_BLANK || PlayerTile == LVL_ROPE) &&
                        (PersonBottom < (Person->TileY + 1) * kTileHeight);
 
     if (!AcceptableMove(Person, IsEnemy) || GotFlying && !Turbo) {
@@ -824,6 +826,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Treasure->Height = kTileHeight;
           Treasure->X = Treasure->TileX * kTileWidth;
           Treasure->Y = Treasure->TileY * kTileHeight;
+        }
+        else if (Symbol == 'r') {
+          Value = LVL_RESPAWN;
+          gRespawns[gRespawnCount] = {Column, Row};
+          gRespawnCount++;
         } else if (Symbol == '=')
           Value = LVL_BRICK;
         else if (Symbol == '+')
@@ -1033,6 +1040,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     int Turbo = false;
     int kPathCooldown = 30;
 
+    if (Enemy->IsDead) {
+      Enemy->IsDead = false;
+      gRespawnIndex = gRespawnIndex % gRespawnCount;
+      v2i Position = gRespawns[gRespawnIndex];
+
+      // Erase the dead
+      DrawTile(Enemy->TileX, Enemy->TileY);
+
+      Enemy->TileX = Position.x;
+      Enemy->TileY = Position.y;
+      Enemy->X = Position.x * kTileWidth + Enemy->Width / 2;
+      Enemy->Y = Position.y * kTileHeight + Enemy->Height / 2;
+      gRespawnIndex++;
+    }
+
     player *Player = Enemy->Pursuing;
     if (Player == NULL || Enemy->PathCooldown <= 0) {
       if (gDebug) {
@@ -1180,10 +1202,26 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Animation->Counter = 0;
         Animation->Frame++;
       }
+
       if (Animation->Frame >= Animation->FrameCount) {
         SetTile(Brick->TileX, Brick->TileY, LVL_BRICK);
         DrawTile(Brick->TileX, Brick->TileY - 1);
         DrawTile(Brick->TileX, Brick->TileY);
+
+        // See if we've killed someone
+        for (int e = 0; e < Level->EnemyCount; e++) {
+          enemy *Enemy = &gEnemies[e];
+          if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
+            Enemy->IsDead = true;
+          }
+        }
+        for (int p = 0; p < Level->PlayerCount; p++) {
+          player *Player = &gPlayers[p];
+          if (Player->TileX == Brick->TileX && Player->TileY == Brick->TileY) {
+            Player->IsDead = true;
+          }
+        }
+
         Brick->IsUsed = false;
         continue;
       }
