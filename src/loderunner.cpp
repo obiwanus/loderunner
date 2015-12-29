@@ -514,6 +514,16 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       } else {
         Person->Animation = &Person->RopeRight;
       }
+      // Adjust so it's easy to grab a rope
+      if (!IsEnemy && !PressedUp && !PressedDown &&
+          CheckTile(Person->TileX, Person->TileY) == LVL_LADDER &&
+          CheckTile(Person->TileX + 1, Person->TileY) == LVL_ROPE) {
+        int PersonTop = Person->Y - Person->Height / 2;
+        int RopeY = Person->TileY * kTileHeight;
+        if (Abs(PersonTop - RopeY) < 10) {
+          Person->Y = RopeY + Person->Height / 2;
+        }
+      }
       Animate = true;
       Person->Facing = RIGHT;
     }
@@ -529,6 +539,17 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
         Person->Animation = &Person->GoingLeft;
       } else {
         Person->Animation = &Person->RopeLeft;
+      }
+      // @copypaste
+      // Adjust so it's easy to grab a rope
+      if (!IsEnemy && !PressedUp && !PressedDown &&
+          CheckTile(Person->TileX, Person->TileY) == LVL_LADDER &&
+          CheckTile(Person->TileX - 1, Person->TileY) == LVL_ROPE) {
+        int PersonTop = Person->Y - Person->Height / 2;
+        int RopeY = Person->TileY * kTileHeight;
+        if (Abs(PersonTop - RopeY) < 10) {
+          Person->Y = RopeY + Person->Height / 2;
+        }
       }
       Animate = true;
       Person->Facing = LEFT;
