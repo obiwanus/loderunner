@@ -423,6 +423,15 @@ void FindPath(enemy *Enemy, player *Player) {
   }
 }
 
+void ErasePerson(person *Person) {
+  // Redraw tiles covered by person
+  for (int Row = Person->TileY - 1; Row <= Person->TileY + 1; Row++) {
+    for (int Col = Person->TileX - 1; Col <= Person->TileX + 1; Col++) {
+      DrawTile(Col, Row);
+    }
+  }
+}
+
 void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
                   bool32 PressedDown, bool32 PressedLeft, bool32 PressedRight,
                   bool32 PressedFire, bool32 Turbo) {
@@ -741,13 +750,6 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     }
   }
   if (Person->FireCooldown > 0) Person->FireCooldown--;
-
-  // Redraw tiles covered by person
-  for (int Row = Person->TileY - 1; Row <= Person->TileY + 1; Row++) {
-    for (int Col = Person->TileX - 1; Col <= Person->TileX + 1; Col++) {
-      DrawTile(Col, Row);
-    }
-  }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -763,7 +765,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Init level
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
-    char const *Filename = "levels/level1.txt";
+    char const *Filename = "levels/level6.txt";
     file_read_result FileReadResult =
         GameMemory->DEBUGPlatformReadEntireFile(Filename);
 
@@ -895,7 +897,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Player->IsInitialized = true;
     Player->Width = kHumanWidth;
     Player->Height = kHumanHeight;
-    Player->Animation = &Player->Falling;
+    Player->Animation = &Player->Blinking;
+    Player->Animate = true;
     Player->Facing = RIGHT;
 
     // Init animations
@@ -906,6 +909,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Animation = &Player->Falling;
     Animation->FrameCount = 1;
     Animation->Frames[0] = {72, 0, 0};
+
+    // Blinking
+    Animation = &Player->Blinking;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {72, 0, 8};
+    Animation->Frames[1] = {72, 32, 8};
 
     // Going right
     Animation = &Player->GoingRight;
@@ -1009,6 +1018,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 Turbo = false;
     int Speed = 4;
 
+    ErasePerson(Player);
+
     // Update player
     player_input *Input = &NewInput->Players[i];
 
@@ -1026,6 +1037,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 #endif
 
+    if (!Level->HasStarted) {
+      for (int button = 0; button < INPUT_BUTTON_COUNT; button++) {
+        if (Input->Buttons[button].EndedDown) {
+          Level->HasStarted = true;
+          break;
+        }
+      }
+    }
+    if (!Level->HasStarted) break;
+
     bool32 IsEnemy = false;
     UpdatePerson(Player, IsEnemy, Speed, PressedUp, PressedDown, PressedLeft,
                  PressedRight, PressedFire, Turbo);
@@ -1034,6 +1055,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update enemies
   for (int i = 0; i < Level->EnemyCount; i++) {
     enemy *Enemy = &gEnemies[i];
+
+    if (!Level->HasStarted) break;
+
+    ErasePerson(Enemy);
 
     bool32 Animate = false;
     int Speed = 2;
@@ -1044,9 +1069,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->IsDead = false;
       gRespawnIndex = gRespawnIndex % gRespawnCount;
       v2i Position = gRespawns[gRespawnIndex];
-
-      // Erase the dead
-      DrawTile(Enemy->TileX, Enemy->TileY);
 
       Enemy->TileX = Position.x;
       Enemy->TileY = Position.y;

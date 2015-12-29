@@ -87,9 +87,11 @@ struct game_button_state {
   bool32 EndedDown;
 };
 
+#define INPUT_BUTTON_COUNT 7
+
 struct player_input {
   union {
-    game_button_state Buttons[7];
+    game_button_state Buttons[INPUT_BUTTON_COUNT];
 
     struct {
       game_button_state Up;
@@ -167,6 +169,7 @@ struct person : entity {
   animation RopeLeft;
   animation RopeRight;
   animation Falling;
+  animation Blinking;
 
   bool32 Animate;
   bool32 IsInitialized;
@@ -243,6 +246,7 @@ struct level {
   int PlayerCount;
   int EnemyCount;
   int TreasureCount;
+  bool32 HasStarted;
   tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   water_point WaterMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   int DirectionMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
