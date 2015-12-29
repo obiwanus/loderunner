@@ -765,7 +765,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Init level
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
-    char const *Filename = "levels/level6.txt";
+    char const *Filename = "levels/level1.txt";
     file_read_result FileReadResult =
         GameMemory->DEBUGPlatformReadEntireFile(Filename);
 
@@ -828,8 +828,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Treasure->Height = kTileHeight;
           Treasure->X = Treasure->TileX * kTileWidth;
           Treasure->Y = Treasure->TileY * kTileHeight;
-        }
-        else if (Symbol == 'r') {
+        } else if (Symbol == 'r') {
           Value = LVL_RESPAWN;
           gRespawns[gRespawnCount] = {Column, Row};
           gRespawnCount++;
@@ -1254,6 +1253,37 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update and draw treasures
   for (int i = 0; i < Level->TreasureCount; i++) {
     treasure *Treasure = &gTreasures[i];
+
+    if (Treasure->IsCollected) continue;
+
+    const int kCollectMarginX = 10;
+    const int kCollectMarginY = 20;
+
+    // Check if it's being collected
+    for (int j = 0; j < Level->EnemyCount; j++) {
+      enemy *Enemy = &gEnemies[j];
+      // TODO: collect by enemies
+    }
+    for (int j = 0; j < Level->PlayerCount; j++) {
+      player *Player = &gPlayers[j];
+      if (Abs(Player->X - (Treasure->X + kTileWidth / 2)) < kCollectMarginX &&
+          Abs(Player->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMarginY) {
+        Treasure->IsCollected = true;
+        Level->TreasuresCollected++;
+        if (Level->TreasuresCollected == Level->TreasureCount) {
+          // All treasures collected
+          for (int Row = 0; Row < Level->Height; Row++) {
+            for (int Col = 0; Col < Level->Width; Col ++) {
+              if (CheckTile(Col, Row) == LVL_WIN_LADDER) {
+                SetTile(Col, Row, LVL_LADDER);
+                DrawTile(Col, Row);
+              }
+            }
+          }
+        }
+      }
+    }
+
     int Speed = 4;  // divides kTileHeight, so no problems
 
     int BottomTile = CheckTile(Treasure->TileX,
@@ -1287,7 +1317,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Draw all treasures so they don't blink
   for (int i = 0; i < Level->TreasureCount; i++) {
-    DrawSprite(gTreasures[i].Position, kTileWidth, kTileHeight, 96, 96);
+    treasure *Treasure = &gTreasures[i];
+    if (Treasure->IsCollected) continue;
+    DrawSprite(Treasure->Position, kTileWidth, kTileHeight, 96, 96);
   }
 
   if (gDebug) {

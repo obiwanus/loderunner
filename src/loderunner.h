@@ -201,6 +201,7 @@ struct enemy : person {
 struct treasure : entity {
   int TileX;
   int TileY;
+  bool32 IsCollected;
 };
 
 struct crushed_brick : entity {
@@ -246,6 +247,7 @@ struct level {
   int PlayerCount;
   int EnemyCount;
   int TreasureCount;
+  int TreasuresCollected;
   bool32 HasStarted;
   tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   water_point WaterMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
