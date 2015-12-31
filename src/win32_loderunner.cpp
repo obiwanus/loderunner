@@ -1,6 +1,7 @@
 #include "loderunner_platform.h"
 
 #include "loderunner.h"
+#include <time.h>
 #include <windows.h>
 #include <intrin.h>
 
@@ -279,6 +280,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      LPSTR lpCmdLine, int nCmdShow) {
   win32_game_code Game = Win32LoadGameCode();
   Assert(Game.IsValid);
+
+  // Random seed
+  srand((u32)time(NULL));
 
   WNDCLASS WindowClass = {};
   WindowClass.style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;

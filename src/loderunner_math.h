@@ -2,6 +2,25 @@
 #define LODERUNNER_MATH_H
 
 #include <math.h>
+#include <stdlib.h>
+
+int randint(int n) {
+  // Copied from StackOverflow
+  if ((n - 1) == RAND_MAX) {
+    return rand();
+  } else {
+    // Chop off all of the values that would cause skew...
+    long end = RAND_MAX / n;  // truncate skew
+    Assert(end > 0L);
+    end *= n;
+
+    int r;
+    while ((r = rand()) >= end)
+      ;
+
+    return r % n;
+  }
+}
 
 union v2 {
   struct {

@@ -11,7 +11,6 @@ global treasure *gTreasures;
 
 global v2i gRespawns[4];
 global int gRespawnCount;
-global int gRespawnIndex;
 
 global level *Level;
 global bmp_file *gImage;
@@ -1083,14 +1082,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->ParalyseCooldown = 0;
       Enemy->ParalyseImmunityCooldown = 0;
 
-      gRespawnIndex = gRespawnIndex % gRespawnCount;
-      v2i Position = gRespawns[gRespawnIndex];
+      v2i Position = gRespawns[randint(gRespawnCount)];
 
       Enemy->TileX = Position.x;
       Enemy->TileY = Position.y;
       Enemy->X = Position.x * kTileWidth + Enemy->Width / 2;
       Enemy->Y = Position.y * kTileHeight + Enemy->Height / 2;
-      gRespawnIndex++;
     }
 
     if (Enemy->IsParalysed && Enemy->ParalyseCooldown <= 0) {
@@ -1269,10 +1266,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         for (int e = 0; e < Level->EnemyCount; e++) {
           enemy *Enemy = &gEnemies[e];
 
-          // if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
-          //   Enemy->IsDead = true;
-          //   break;
-          // }
+          if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
+            Enemy->IsDead = true;
+            break;
+          }
 
           // @copypaste - maybe put in a function?
           int EnemyLeft = (int)Enemy->X - Enemy->Width / 2;
