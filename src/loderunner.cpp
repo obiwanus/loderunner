@@ -362,7 +362,9 @@ void FindPath(enemy *Enemy, player *Player) {
         X = Col;
         Y = Row + 1;
         if (CheckWMapPoint(X, Y) == WATERMAP_NOT_VISITED) {
-          if (CheckTile(X, Y) == LVL_LADDER) {
+          if (CheckTile(X, Y) == LVL_LADDER ||
+              Enemy->ParalyseImmunityCooldown > 0 &&
+                  CheckTile(X, Y) == LVL_BLANK_TMP) {
             SetWMapPoint(X, Y, WATERMAP_WATER);
             SetDMapPoint(X, Y, Col, Row);
           }
@@ -456,6 +458,17 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       OnLadder = true;
       LadderTileX = Right;
     }
+    if (Person->ParalyseImmunityCooldown > 0 && OnLadder == false) {
+      if (CheckTile(Left, Top) == LVL_BLANK_TMP ||
+          CheckTile(Left, Bottom) == LVL_BLANK_TMP) {
+        OnLadder = true;
+        LadderTileX = Left;
+      } else if (CheckTile(Right, Top) == LVL_BLANK_TMP ||
+                 CheckTile(Right, Bottom) == LVL_BLANK_TMP) {
+        OnLadder = true;
+        LadderTileX = Right;
+      }
+    }
   }
 
   bool32 LadderBelow = false;
@@ -464,7 +477,9 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     int Row = Person->TileY + 1;
     int PersonBottom = (int)Person->Y + Person->Height / 2;
     int TileTop = Row * kTileHeight;
-    if (CheckTile(Col, Row) == LVL_LADDER) {
+    if (CheckTile(Col, Row) == LVL_LADDER ||
+        (Person->ParalyseImmunityCooldown > 0 &&
+         CheckTile(Col, Row) == LVL_BLANK_TMP)) {
       if (PersonBottom >= TileTop) LadderBelow = true;
     }
   }
@@ -646,9 +661,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       int EnemyBottom = Enemy->Y + Enemy->Height / 2;
       if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
           PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
-        Person->Bump = true;
         Person->BumpCooldown = 40;
-        Enemy->Bump = true;
         Enemy->BumpCooldown = 20;
 
         // Send in different directions
@@ -1066,6 +1079,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     if (Enemy->IsDead) {
       Enemy->IsDead = false;
+      Enemy->IsParalysed = false;
+      Enemy->ParalyseCooldown = 0;
+      Enemy->ParalyseImmunityCooldown = 0;
+
       gRespawnIndex = gRespawnIndex % gRespawnCount;
       v2i Position = gRespawns[gRespawnIndex];
 
@@ -1074,6 +1091,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->X = Position.x * kTileWidth + Enemy->Width / 2;
       Enemy->Y = Position.y * kTileHeight + Enemy->Height / 2;
       gRespawnIndex++;
+    }
+
+    if (Enemy->IsParalysed && Enemy->ParalyseCooldown <= 0) {
+      Enemy->IsParalysed = false;
+      Enemy->ParalyseImmunityCooldown = 30;
+      Enemy->PathCooldown = 0;  // build a path
     }
 
     player *Player = Enemy->Pursuing;
@@ -1147,16 +1170,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
-    Enemy->Bump = false;
     if (Enemy->BumpCooldown > 0) {
       Enemy->BumpCooldown--;
     }
 
-    // If fell and nowhere to go
-    if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_BLANK_TMP) {
-      // Stand and wait
+    if (Enemy->ParalyseCooldown > 0) {
+      Enemy->ParalyseCooldown--;
       Enemy->DirectionX = NOWHERE;
       Enemy->DirectionY = NOWHERE;
+    }
+
+    if (Enemy->ParalyseImmunityCooldown > 0) {
+      Enemy->ParalyseImmunityCooldown--;
+    }
+
+    if (!Enemy->IsParalysed && Enemy->ParalyseImmunityCooldown <= 0 &&
+        CheckTile(Enemy->TileX, Enemy->TileY) == LVL_BLANK_TMP) {
+      Enemy->IsParalysed = true;
+      Enemy->ParalyseCooldown = 4 * 60;
     }
 
     bool32 PressedUp = Enemy->DirectionY == UP;
@@ -1229,13 +1260,33 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         DrawTile(Brick->TileX, Brick->TileY - 1);
         DrawTile(Brick->TileX, Brick->TileY);
 
+        int TileLeft = Brick->TileX * kTileWidth;
+        int TileRight = (Brick->TileX + 1) * kTileWidth;
+        int TileTop = Brick->TileY * kTileHeight;
+        int TileBottom = (Brick->TileY + 1) * kTileHeight;
+
         // See if we've killed someone
         for (int e = 0; e < Level->EnemyCount; e++) {
           enemy *Enemy = &gEnemies[e];
-          if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
+
+          // if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
+          //   Enemy->IsDead = true;
+          //   break;
+          // }
+
+          // @copypaste - maybe put in a function?
+          int EnemyLeft = (int)Enemy->X - Enemy->Width / 2;
+          int EnemyRight = (int)Enemy->X + Enemy->Width / 2;
+          int EnemyTop = (int)Enemy->Y - Enemy->Height / 2;
+          int EnemyBottom = (int)Enemy->Y + Enemy->Height / 2;
+
+          if (EnemyRight > TileLeft && EnemyLeft < TileRight &&
+              EnemyBottom > TileTop && EnemyTop < TileBottom) {
             Enemy->IsDead = true;
+            break;
           }
         }
+
         for (int p = 0; p < Level->PlayerCount; p++) {
           player *Player = &gPlayers[p];
           if (Player->TileX == Brick->TileX && Player->TileY == Brick->TileY) {
@@ -1273,7 +1324,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         if (Level->TreasuresCollected == Level->TreasureCount) {
           // All treasures collected
           for (int Row = 0; Row < Level->Height; Row++) {
-            for (int Col = 0; Col < Level->Width; Col ++) {
+            for (int Col = 0; Col < Level->Width; Col++) {
               if (CheckTile(Col, Row) == LVL_WIN_LADDER) {
                 SetTile(Col, Row, LVL_LADDER);
                 DrawTile(Col, Row);

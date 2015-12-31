@@ -181,6 +181,10 @@ struct person : entity {
   direction Going;
   direction DirectionX;
   direction DirectionY;
+
+  bool32 IsParalysed;
+  int ParalyseCooldown;
+  int ParalyseImmunityCooldown;
 };
 
 struct player : person {
