@@ -4,6 +4,8 @@
 global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
+global bool32 gClock = true;
+
 global player gPlayers[2];
 global enemy *gEnemies;
 
@@ -974,6 +976,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Enemy->Width = kHumanWidth;
     Enemy->Height = kHumanHeight;
     Enemy->Animation = &Enemy->Falling;
+    Enemy->CarriesTreasure = -1;
 
     // Init animations
     frame *Frames = NULL;
@@ -1018,6 +1021,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Animation->Frames[0] = {0, 288, 8};
     Animation->Frames[1] = {24, 288, 8};
   }
+
+  if (!gClock) return;
 
   // Update players
   for (int i = 0; i < 2; i++) {
@@ -1187,6 +1192,44 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->ParalyseCooldown = 4 * 60;
     }
 
+    // Maybe drop treasure
+    if (Enemy->CarriesTreasure >= 0 && (Enemy->X % kTileWidth == 0) &&
+        CheckTile(Enemy->TileX, Enemy->TileY) != LVL_LADDER &&
+        Enemy->ParalyseCooldown <= 0 && !Enemy->IsFalling) {
+      if (randint(100) < 8) {
+        bool32 AnotherTreasureOccupiesThisTile = false;
+        for (int j = 0; j < Level->TreasureCount; j++) {
+          if (Enemy->CarriesTreasure == j) continue;
+          treasure *AnotherTreasure = &gTreasures[j];
+          if (AnotherTreasure->IsCollected) continue;
+          if (AnotherTreasure->TileX == Enemy->TileX &&
+              AnotherTreasure->TileY == Enemy->TileY) {
+            AnotherTreasureOccupiesThisTile = true;
+          }
+        }
+        if (!AnotherTreasureOccupiesThisTile) {
+          treasure *Treasure = &gTreasures[Enemy->CarriesTreasure];
+          Treasure->IsCollected = false;
+          Treasure->X = Enemy->X;
+          Treasure->Y = Enemy->TileY * kTileHeight;
+          Treasure->TileX = Enemy->TileX;
+          Treasure->TileY = Enemy->TileY;
+          Enemy->CarriesTreasure = -1;
+        }
+      }
+    }
+
+    // If in a pit, drop the treasure
+    if (Enemy->CarriesTreasure >= 0 && Enemy->IsParalysed) {
+      treasure *Treasure = &gTreasures[Enemy->CarriesTreasure];
+      Treasure->IsCollected = false;
+      Treasure->TileX = Enemy->TileX;
+      Treasure->TileY = Enemy->TileY - 1;
+      Treasure->X = Treasure->TileX * kTileWidth;
+      Treasure->Y = Treasure->TileY * kTileHeight;
+      Enemy->CarriesTreasure = -1;
+    }
+
     bool32 PressedUp = Enemy->DirectionY == UP;
     bool32 PressedDown = Enemy->DirectionY == DOWN;
     bool32 PressedLeft = Enemy->DirectionX == LEFT;
@@ -1304,18 +1347,26 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     if (Treasure->IsCollected) continue;
 
-    const int kCollectMarginX = 10;
-    const int kCollectMarginY = 20;
+    const int kCollectMargin = 10;
 
     // Check if it's being collected
     for (int j = 0; j < Level->EnemyCount; j++) {
       enemy *Enemy = &gEnemies[j];
-      // TODO: collect by enemies
+
+      if (Enemy->CarriesTreasure >= 0) continue;
+
+      if (Abs(Enemy->X - (Treasure->X + kTileWidth / 2)) < kCollectMargin &&
+          Abs(Enemy->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMargin) {
+        if (randint(100) < 5) {
+          Treasure->IsCollected = true;
+          Enemy->CarriesTreasure = i;
+        }
+      }
     }
     for (int j = 0; j < Level->PlayerCount; j++) {
       player *Player = &gPlayers[j];
-      if (Abs(Player->X - (Treasure->X + kTileWidth / 2)) < kCollectMarginX &&
-          Abs(Player->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMarginY) {
+      if (Abs(Player->X - (Treasure->X + kTileWidth / 2)) < kCollectMargin &&
+          Abs(Player->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMargin) {
         Treasure->IsCollected = true;
         Level->TreasuresCollected++;
         if (Level->TreasuresCollected == Level->TreasureCount) {
@@ -1339,13 +1390,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 AcceptableMove =
         BottomTile != LVL_BRICK && BottomTile != LVL_BRICK_HARD &&
-        BottomTile != LVL_LADDER && BottomTile != LVL_INVALID;
+        BottomTile != LVL_LADDER && BottomTile != LVL_INVALID &&
+        BottomTile != LVL_BLANK_TMP;
 
     // Check if there's another treasure below - O(n2)
     bool32 TreasureBelow = false;
     for (int j = 0; j < Level->TreasureCount; j++) {
       if (i == j) continue;
       treasure *AnotherTreasure = &gTreasures[j];
+      if (AnotherTreasure->IsCollected) continue;
       if (Treasure->TileX != AnotherTreasure->TileX) continue;
       int Bottom = Treasure->Y + Treasure->Height;
       if (Bottom + Speed > AnotherTreasure->Y &&

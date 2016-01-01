@@ -201,6 +201,7 @@ struct enemy : person {
   v2i Path[MAX_PATH_LENGTH];
   int PathPointIndex;
   int PathLength;
+  int CarriesTreasure;
 };
 
 struct treasure : entity {
