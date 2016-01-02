@@ -15,9 +15,11 @@ global bool GlobalRunning;
 
 global BITMAPINFO GlobalBitmapInfo;
 global LARGE_INTEGER GlobalPerformanceFrequency;
+global WINDOWPLACEMENT gWindowPlacement = {sizeof(gWindowPlacement)};
 
 global game_memory GameMemory;
 global game_offscreen_buffer GameBackBuffer;
+global bool32 gRedrawLevel;
 
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
@@ -58,6 +60,31 @@ internal void Win32UpdateWindow(HDC hdc) {
                 SRCCOPY);
 }
 
+void Win32ToggleFullscreen(HWND hwnd) {
+  // Copied from the Raymond Chen's article:
+  // https://blogs.msdn.microsoft.com/oldnewthing/20100412-00/?p=14353/
+
+  DWORD dwStyle = GetWindowLong(hwnd, GWL_STYLE);
+  if (dwStyle & WS_OVERLAPPEDWINDOW) {
+    MONITORINFO mi = {sizeof(mi)};
+    if (GetWindowPlacement(hwnd, &gWindowPlacement) &&
+        GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY),
+                       &mi)) {
+      SetWindowLong(hwnd, GWL_STYLE, dwStyle & ~WS_OVERLAPPEDWINDOW);
+      SetWindowPos(hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+                   mi.rcMonitor.right - mi.rcMonitor.left,
+                   mi.rcMonitor.bottom - mi.rcMonitor.top,
+                   SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+  } else {
+    SetWindowLong(hwnd, GWL_STYLE, dwStyle | WS_OVERLAPPEDWINDOW);
+    SetWindowPlacement(hwnd, &gWindowPlacement);
+    SetWindowPos(hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE |
+                                             SWP_NOZORDER | SWP_NOOWNERZORDER |
+                                             SWP_FRAMECHANGED);
+  }
+}
+
 internal void Win32ResizeClientWindow(HWND Window) {
   if (!GameMemory.IsInitialized) return;  // no buffer yet
 
@@ -75,6 +102,8 @@ internal void Win32ResizeClientWindow(HWND Window) {
 
   GameBackBuffer.Width = Width;
   GameBackBuffer.Height = Height;
+
+  gRedrawLevel = true;
 
   GlobalBitmapInfo.bmiHeader.biWidth = Width;
   GlobalBitmapInfo.bmiHeader.biHeight = -Height;
@@ -264,6 +293,8 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
 #if BUILD_INTERNAL
             Win32ProcessKeyboardMessage(&Player1->Debug, IsDown);
 #endif
+          } else if (VKCode == VK_RETURN && AltKeyWasDown && WasDown) {
+            Win32ToggleFullscreen(Message.hwnd);
           }
         }
       } break;
@@ -329,6 +360,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     PatBlt(hdc, 0, 0, kWindowWidth, kWindowHeight, PATCOPY);
     DeleteObject(BgBrush);
 
+    // Fullscreen by default
+    Win32ToggleFullscreen(Window);
+
     if (Window) {
       GlobalRunning = true;
 
@@ -391,7 +425,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         Win32ProcessPendingMessages(NewInput);
         NewInput->dtForFrame = TargetMSPF;
 
-        Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory);
+        Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory, gRedrawLevel);
+        if (gRedrawLevel) {
+          gRedrawLevel = false;
+        }
 
         // Swap inputs
         game_input *TmpInput = OldInput;

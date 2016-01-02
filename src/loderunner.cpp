@@ -888,8 +888,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         }
       }
     }
+  }
 
-    // Draw level
+  if (RedrawLevel) {
     DrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
                   0x000A0D0B);
 
@@ -1195,7 +1196,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Maybe drop treasure
     if (Enemy->CarriesTreasure >= 0 && (Enemy->X % kTileWidth == 0) &&
         CheckTile(Enemy->TileX, Enemy->TileY) != LVL_LADDER &&
-        Enemy->ParalyseCooldown <= 0 && !Enemy->IsFalling) {
+        Enemy->ParalyseCooldown <= 0) {
       if (randint(100) < 8) {
         bool32 AnotherTreasureOccupiesThisTile = false;
         for (int j = 0; j < Level->TreasureCount; j++) {

@@ -286,7 +286,7 @@ struct game_memory {
 
 #define GAME_UPDATE_AND_RENDER(name)                             \
   void name(game_input *NewInput, game_offscreen_buffer *Buffer, \
-            game_memory *Memory)
+            game_memory *Memory, bool32 RedrawLevel)
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 GAME_UPDATE_AND_RENDER(GameUpdateAndRenderStub) {
   // nothing
