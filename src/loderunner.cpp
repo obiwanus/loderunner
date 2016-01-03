@@ -287,6 +287,8 @@ void LoadLevel(int Index) {
         Value = LVL_BRICK;
       else if (Symbol == '+')
         Value = LVL_BRICK_HARD;
+      else if (Symbol == 'd')
+        Value = LVL_BLANK_TMP;
       else if (Symbol == '#')
         Value = LVL_LADDER;
       else if (Symbol == '-')
@@ -448,7 +450,6 @@ void LoadLevel(int Index) {
     Animation->Frames[1] = {24, 288, 8};
   }
 }
-
 
 internal bool32 CanGoThroughTile(int TileX, int TileY) {
   tile_type Tile = CheckTile(TileX, TileY);
@@ -833,7 +834,8 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       Person->Y = Old;
 
       // Check if we won
-      if (!IsEnemy && Level.AllTreasuresCollected && OnLadder && Person->Y <= Person->Height / 2) {
+      if (!IsEnemy && Level.AllTreasuresCollected && OnLadder &&
+          Person->Y <= Person->Height / 2) {
         Level.Index++;
         if (Level.Index == kLevelCount) {
           exit(0);
