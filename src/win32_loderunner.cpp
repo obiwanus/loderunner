@@ -273,7 +273,7 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
           GlobalRunning = false;
         }
         if (VKCode == VK_ESCAPE) {
-          GlobalRunning = false;
+          // GlobalRunning = false;
         }
 
         // Get input

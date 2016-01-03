@@ -1053,7 +1053,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
   // Death?
   if (!IsEnemy) {
     int kRectAdjust = 5;
-    for (int enemy_num = 0; enemy_num <= Level.EnemyCount; enemy_num++) {
+    for (int enemy_num = 0; enemy_num < Level.EnemyCount; enemy_num++) {
       enemy *Enemy = &Level.Enemies[enemy_num];
       if (EntitiesCollide(Person, Enemy, -kRectAdjust, -kRectAdjust)) {
         Person->IsDead = true;
@@ -1104,8 +1104,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Level.IsDrawn = true;
   }
 
-  if (!gClock) return;
-
   // Update players
   for (int i = 0; i < 2; i++) {
     player *Player = &Level.Players[i];
@@ -1116,8 +1114,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 Turbo = false;
     int Speed = 4;
 
-    ErasePerson(Player);
-
     // Update player
     player_input *Input = &NewInput->Players[i];
 
@@ -1126,6 +1122,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedLeft = Input->Left.EndedDown;
     bool32 PressedRight = Input->Right.EndedDown;
     bool32 PressedFire = Input->Fire.EndedDown;
+
+    if (Player->IsDead && PressedFire) {
+       gClock = true;
+       LoadLevel(Level.Index);
+    }
+    if (!gClock) return;
+
+    ErasePerson(Player);
 
 #ifdef BUILD_INTERNAL
     // Turbo
@@ -1142,6 +1146,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       for (int button = 0; button < INPUT_BUTTON_COUNT; button++) {
         if (Input->Buttons[button].EndedDown && Level.StartCountdown <= 0) {
           Level.HasStarted = true;
+          // Prevent player from disappearing
+          Player->Animation = &Player->Falling;
           break;
         }
       }
@@ -1219,7 +1225,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     Enemy->PathCooldown--;
 
-    if (Enemy->PathExists && Enemy->BumpCooldown <= 0) {
+    // If sees the player directly
+    bool32 SeesDirectly = false;
+    if (Player->Y == Enemy->Y && Abs(Player->TileX - Enemy->TileX) <= 2) {
+      SeesDirectly = true;
+    }
+
+    if (Enemy->PathExists && Enemy->BumpCooldown <= 0 && !SeesDirectly) {
       v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
       int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
       int TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
@@ -1254,6 +1266,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER &&
           Abs(DeltaY) <= 1 && Abs(DeltaX) > 2) {
         Enemy->DirectionY = NOWHERE;
+      }
+    }
+
+    if (SeesDirectly) {
+      // Grab him!
+
+      int DeltaX = Player->X - Enemy->X;
+      int DeltaY = Player->Y - Enemy->Y;
+
+      if (DeltaX > 0) {
+        Enemy->DirectionX = RIGHT;
+      } else {
+        Enemy->DirectionX = LEFT;
+      }
+      if (DeltaY > 0) {
+        Enemy->DirectionY = DOWN;
+      } else {
+        Enemy->DirectionY = UP;
       }
     }
 
