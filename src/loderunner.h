@@ -273,6 +273,7 @@ struct level {
   int TreasureCount;
   treasure *Treasures;
   int TreasuresCollected;
+  bool32 AllTreasuresCollected;
 
   tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   water_point WaterMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];

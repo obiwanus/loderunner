@@ -207,6 +207,249 @@ internal bmp_file *LoadSprite(char const *Filename) {
   return Result;
 }
 
+void LoadLevel(int Index) {
+  // Zero everything
+  Level = {};
+  Level.IsInitialized = true;
+  Level.Index = Index;
+
+  const char *LevelString = LEVELS[Index];
+
+  // Get level info
+  int MaxWidth = 0;
+  int Width = 0;
+  int Height = 1;
+
+  int i = 0;
+  char Symbol = LevelString[0];
+
+  while ((Symbol = LevelString[i++]) != '\0') {
+    if (Symbol == '\n') {
+      if (MaxWidth < Width) {
+        MaxWidth = Width;
+      }
+      Width = 0;
+      Height += 1;
+    } else if (Symbol != '\r') {
+      Width += 1;
+    }
+    if (Symbol == 'p') {
+      Level.PlayerCount++;
+    }
+    if (Symbol == 'e') {
+      Level.EnemyCount++;
+    }
+    if (Symbol == 't') {
+      Level.TreasureCount++;
+    }
+  }
+
+  Level.Width = MaxWidth;
+  Level.Height = Height;
+  Level.StartCountdown = 30;
+
+  // Allocate memory for enemies and treasures
+  Level.Enemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level.EnemyCount);
+  Level.Treasures =
+      (treasure *)GameMemoryAlloc(sizeof(treasure) * Level.TreasureCount);
+
+  // Read level data
+  {
+    int Column = 0;
+    int Row = 0;
+    int EnemyNum = 0;
+    int TreasureNum = 0;
+
+    i = 0;
+    Symbol = LevelString[0];
+
+    while ((Symbol = LevelString[i++]) != '\0') {
+      tile_type Value = LVL_BLANK;
+
+      if (Symbol == '|')
+        Value = LVL_WIN_LADDER;
+      else if (Symbol == 't') {
+        Value = LVL_BLANK;
+        treasure *Treasure = &Level.Treasures[TreasureNum];
+        TreasureNum++;
+        *Treasure = {};  // zero everything
+        Treasure->TileX = Column;
+        Treasure->TileY = Row;
+        Treasure->Width = kTileWidth;
+        Treasure->Height = kTileHeight;
+        Treasure->X = Treasure->TileX * kTileWidth;
+        Treasure->Y = Treasure->TileY * kTileHeight;
+      } else if (Symbol == 'r') {
+        Value = LVL_RESPAWN;
+        Level.Respawns[Level.RespawnCount] = {Column, Row};
+        Level.RespawnCount++;
+      } else if (Symbol == '=')
+        Value = LVL_BRICK;
+      else if (Symbol == '+')
+        Value = LVL_BRICK_HARD;
+      else if (Symbol == '#')
+        Value = LVL_LADDER;
+      else if (Symbol == '-')
+        Value = LVL_ROPE;
+      else if (Symbol == 'e') {
+        Value = LVL_BLANK;
+        enemy *Enemy = &Level.Enemies[EnemyNum];
+        EnemyNum++;
+        *Enemy = {};  // zero everything
+        Enemy->TileX = Column;
+        Enemy->TileY = Row;
+        Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
+        Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
+      } else if (Symbol == 'p') {
+        Value = LVL_BLANK;
+        player *Player = &Level.Players[0];
+        if (Player->IsActive) {
+          Player = &Level.Players[1];
+        }
+        *Player = {};  // zero everything
+        Player->IsActive = true;
+        Player->TileX = Column;
+        Player->TileY = Row;
+        Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
+        Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
+      }
+
+      if (Symbol == '\n') {
+        Column = 0;
+        ++Row;
+      } else if (Symbol != '\r') {
+        Assert(Column < Level.Width);
+        Assert(Row < Level.Height);
+        Level.Contents[Row][Column] = Value;
+        ++Column;
+      }
+    }
+  }
+
+  // Init players
+  for (int player_num = 0; player_num < 2; player_num++) {
+    player *Player = &Level.Players[player_num];
+    if (Player->IsInitialized) {
+      continue;
+    }
+
+    Player->IsInitialized = true;
+    Player->Width = kHumanWidth;
+    Player->Height = kHumanHeight;
+    Player->Animation = &Player->Blinking;
+    Player->Animate = true;
+    Player->Facing = RIGHT;
+
+    // Init animations
+    frame *Frames = NULL;
+    animation *Animation = NULL;
+
+    // Falling
+    Animation = &Player->Falling;
+    Animation->FrameCount = 1;
+    Animation->Frames[0] = {72, 0, 0};
+
+    // Blinking
+    Animation = &Player->Blinking;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {72, 0, 8};
+    Animation->Frames[1] = {72, 32, 8};
+
+    // Going right
+    Animation = &Player->GoingRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 0, 3};
+    Animation->Frames[1] = {24, 0, 2};
+    Animation->Frames[2] = {48, 0, 3};
+
+    // Going left
+    Animation = &Player->GoingLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 32, 3};
+    Animation->Frames[1] = {24, 32, 2};
+    Animation->Frames[2] = {48, 32, 3};
+
+    // On rope right
+    Animation = &Player->RopeRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 64, 3};
+    Animation->Frames[1] = {24, 64, 2};
+    Animation->Frames[2] = {48, 64, 3};
+
+    // On rope left
+    Animation = &Player->RopeLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 96, 3};
+    Animation->Frames[1] = {24, 96, 2};
+    Animation->Frames[2] = {48, 96, 3};
+
+    // On ladder
+    Animation = &Player->Climbing;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {0, 128, 4};
+    Animation->Frames[1] = {24, 128, 4};
+  }
+
+  // Init enemies
+  for (int enemy_num = 0; enemy_num < Level.EnemyCount; enemy_num++) {
+    enemy *Enemy = &Level.Enemies[enemy_num];
+    if (Enemy->IsInitialized) {
+      continue;
+    }
+
+    Enemy->IsInitialized = true;
+
+    Enemy->Width = kHumanWidth;
+    Enemy->Height = kHumanHeight;
+    Enemy->Animation = &Enemy->Falling;
+    Enemy->CarriesTreasure = -1;
+
+    // Init animations
+    frame *Frames = NULL;
+    animation *Animation = NULL;
+
+    // Falling
+    Animation = &Enemy->Falling;
+    Animation->FrameCount = 1;
+    Animation->Frames[0] = {72, 160, 0};
+
+    // Going right
+    Animation = &Enemy->GoingRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 160, 6};
+    Animation->Frames[1] = {24, 160, 4};
+    Animation->Frames[2] = {48, 160, 6};
+
+    // Going left
+    Animation = &Enemy->GoingLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 192, 6};
+    Animation->Frames[1] = {24, 192, 4};
+    Animation->Frames[2] = {48, 192, 6};
+
+    // On rope right
+    Animation = &Enemy->RopeRight;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 224, 6};
+    Animation->Frames[1] = {24, 224, 4};
+    Animation->Frames[2] = {48, 224, 6};
+
+    // On rope left
+    Animation = &Enemy->RopeLeft;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {0, 256, 6};
+    Animation->Frames[1] = {24, 256, 4};
+    Animation->Frames[2] = {48, 256, 6};
+
+    // On ladder
+    Animation = &Enemy->Climbing;
+    Animation->FrameCount = 2;
+    Animation->Frames[0] = {0, 288, 8};
+    Animation->Frames[1] = {24, 288, 8};
+  }
+}
+
+
 internal bool32 CanGoThroughTile(int TileX, int TileY) {
   tile_type Tile = CheckTile(TileX, TileY);
   if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_BLANK_TMP ||
@@ -588,6 +831,16 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
 
     if (!AcceptableMove(Person, IsEnemy) || GotFlying && !Turbo) {
       Person->Y = Old;
+
+      // Check if we won
+      if (!IsEnemy && Level.AllTreasuresCollected && OnLadder && Person->Y <= Person->Height / 2) {
+        Level.Index++;
+        if (Level.Index == kLevelCount) {
+          exit(0);
+        }
+        LoadLevel(Level.Index);
+        return;
+      }
     } else {
       Climbing = true;
       Person->Animation = &Person->Climbing;
@@ -758,126 +1011,6 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
   if (Person->FireCooldown > 0) Person->FireCooldown--;
 }
 
-void LoadLevel(int Index) {
-  // Zero everything
-  Level = {};
-  Level.IsInitialized = true;
-  Level.Index = Index;
-
-  const char *LevelString = LEVELS[Index];
-
-  // Get level info
-  int MaxWidth = 0;
-  int Width = 0;
-  int Height = 1;
-
-  int i = 0;
-  char Symbol = LevelString[0];
-
-  while ((Symbol = LevelString[i++]) != '\0') {
-    if (Symbol == '\n') {
-      if (MaxWidth < Width) {
-        MaxWidth = Width;
-      }
-      Width = 0;
-      Height += 1;
-    } else if (Symbol != '\r') {
-      Width += 1;
-    }
-    if (Symbol == 'p') {
-      Level.PlayerCount++;
-    }
-    if (Symbol == 'e') {
-      Level.EnemyCount++;
-    }
-    if (Symbol == 't') {
-      Level.TreasureCount++;
-    }
-  }
-
-  Level.Width = MaxWidth;
-  Level.Height = Height;
-  Level.StartCountdown = 30;
-
-  // Allocate memory for enemies and treasures
-  Level.Enemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level.EnemyCount);
-  Level.Treasures =
-      (treasure *)GameMemoryAlloc(sizeof(treasure) * Level.TreasureCount);
-
-  // Read level data
-  {
-    int Column = 0;
-    int Row = 0;
-    int EnemyNum = 0;
-    int TreasureNum = 0;
-
-    i = 0;
-    Symbol = LevelString[0];
-
-    while ((Symbol = LevelString[i++]) != '\0') {
-      tile_type Value = LVL_BLANK;
-
-      if (Symbol == '|')
-        Value = LVL_WIN_LADDER;
-      else if (Symbol == 't') {
-        Value = LVL_BLANK;
-        treasure *Treasure = &Level.Treasures[TreasureNum];
-        TreasureNum++;
-        *Treasure = {};  // zero everything
-        Treasure->TileX = Column;
-        Treasure->TileY = Row;
-        Treasure->Width = kTileWidth;
-        Treasure->Height = kTileHeight;
-        Treasure->X = Treasure->TileX * kTileWidth;
-        Treasure->Y = Treasure->TileY * kTileHeight;
-      } else if (Symbol == 'r') {
-        Value = LVL_RESPAWN;
-        Level.Respawns[Level.RespawnCount] = {Column, Row};
-        Level.RespawnCount++;
-      } else if (Symbol == '=')
-        Value = LVL_BRICK;
-      else if (Symbol == '+')
-        Value = LVL_BRICK_HARD;
-      else if (Symbol == '#')
-        Value = LVL_LADDER;
-      else if (Symbol == '-')
-        Value = LVL_ROPE;
-      else if (Symbol == 'e') {
-        Value = LVL_BLANK;
-        enemy *Enemy = &Level.Enemies[EnemyNum];
-        EnemyNum++;
-        *Enemy = {};  // zero everything
-        Enemy->TileX = Column;
-        Enemy->TileY = Row;
-        Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
-        Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
-      } else if (Symbol == 'p') {
-        Value = LVL_BLANK;
-        player *Player = &Level.Players[0];
-        if (Player->IsActive) {
-          Player = &Level.Players[1];
-        }
-        *Player = {};  // zero everything
-        Player->IsActive = true;
-        Player->TileX = Column;
-        Player->TileY = Row;
-        Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
-        Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
-      }
-
-      if (Symbol == '\n') {
-        Column = 0;
-        ++Row;
-      } else if (Symbol != '\r') {
-        Assert(Column < Level.Width);
-        Assert(Row < Level.Height);
-        Level.Contents[Row][Column] = Value;
-        ++Column;
-      }
-    }
-  }
-}
-
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
@@ -917,128 +1050,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 
     Level.IsDrawn = true;
-  }
-
-  // Init players
-  for (int i = 0; i < 2; i++) {
-    player *Player = &Level.Players[i];
-    if (Player->IsInitialized) {
-      continue;
-    }
-
-    Player->IsInitialized = true;
-    Player->Width = kHumanWidth;
-    Player->Height = kHumanHeight;
-    Player->Animation = &Player->Blinking;
-    Player->Animate = true;
-    Player->Facing = RIGHT;
-
-    // Init animations
-    frame *Frames = NULL;
-    animation *Animation = NULL;
-
-    // Falling
-    Animation = &Player->Falling;
-    Animation->FrameCount = 1;
-    Animation->Frames[0] = {72, 0, 0};
-
-    // Blinking
-    Animation = &Player->Blinking;
-    Animation->FrameCount = 2;
-    Animation->Frames[0] = {72, 0, 8};
-    Animation->Frames[1] = {72, 32, 8};
-
-    // Going right
-    Animation = &Player->GoingRight;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 0, 3};
-    Animation->Frames[1] = {24, 0, 2};
-    Animation->Frames[2] = {48, 0, 3};
-
-    // Going left
-    Animation = &Player->GoingLeft;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 32, 3};
-    Animation->Frames[1] = {24, 32, 2};
-    Animation->Frames[2] = {48, 32, 3};
-
-    // On rope right
-    Animation = &Player->RopeRight;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 64, 3};
-    Animation->Frames[1] = {24, 64, 2};
-    Animation->Frames[2] = {48, 64, 3};
-
-    // On rope left
-    Animation = &Player->RopeLeft;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 96, 3};
-    Animation->Frames[1] = {24, 96, 2};
-    Animation->Frames[2] = {48, 96, 3};
-
-    // On ladder
-    Animation = &Player->Climbing;
-    Animation->FrameCount = 2;
-    Animation->Frames[0] = {0, 128, 4};
-    Animation->Frames[1] = {24, 128, 4};
-  }
-
-  // Init enemies
-  for (int i = 0; i < Level.EnemyCount; i++) {
-    enemy *Enemy = &Level.Enemies[i];
-    if (Enemy->IsInitialized) {
-      continue;
-    }
-
-    Enemy->IsInitialized = true;
-
-    Enemy->Width = kHumanWidth;
-    Enemy->Height = kHumanHeight;
-    Enemy->Animation = &Enemy->Falling;
-    Enemy->CarriesTreasure = -1;
-
-    // Init animations
-    frame *Frames = NULL;
-    animation *Animation = NULL;
-
-    // Falling
-    Animation = &Enemy->Falling;
-    Animation->FrameCount = 1;
-    Animation->Frames[0] = {72, 160, 0};
-
-    // Going right
-    Animation = &Enemy->GoingRight;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 160, 6};
-    Animation->Frames[1] = {24, 160, 4};
-    Animation->Frames[2] = {48, 160, 6};
-
-    // Going left
-    Animation = &Enemy->GoingLeft;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 192, 6};
-    Animation->Frames[1] = {24, 192, 4};
-    Animation->Frames[2] = {48, 192, 6};
-
-    // On rope right
-    Animation = &Enemy->RopeRight;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 224, 6};
-    Animation->Frames[1] = {24, 224, 4};
-    Animation->Frames[2] = {48, 224, 6};
-
-    // On rope left
-    Animation = &Enemy->RopeLeft;
-    Animation->FrameCount = 3;
-    Animation->Frames[0] = {0, 256, 6};
-    Animation->Frames[1] = {24, 256, 4};
-    Animation->Frames[2] = {48, 256, 6};
-
-    // On ladder
-    Animation = &Enemy->Climbing;
-    Animation->FrameCount = 2;
-    Animation->Frames[0] = {0, 288, 8};
-    Animation->Frames[1] = {24, 288, 8};
   }
 
   if (!gClock) return;
@@ -1393,6 +1404,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Level.TreasuresCollected++;
         if (Level.TreasuresCollected == Level.TreasureCount) {
           // All treasures collected
+          Level.AllTreasuresCollected = true;
           for (int Row = 0; Row < Level.Height; Row++) {
             for (int Col = 0; Col < Level.Width; Col++) {
               if (CheckTile(Col, Row) == LVL_WIN_LADDER) {
@@ -1401,12 +1413,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
               }
             }
           }
-          Level.Index++;
-          if (Level.Index == kLevelCount) {
-            exit(0);
-          }
-          LoadLevel(Level.Index);
-          return;
         }
       }
     }
