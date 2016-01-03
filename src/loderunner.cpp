@@ -461,19 +461,72 @@ internal bool32 CanGoThroughTile(int TileX, int TileY) {
   }
 }
 
+rect GetBoundingRect(entity *Entity) {
+  rect Result;
+
+  Result.Left = Entity->X - Entity->Width / 2;
+  Result.Right = Entity->X + Entity->Width / 2;
+  Result.Top = Entity->Y - Entity->Height / 2;
+  Result.Bottom = Entity->Y + Entity->Height / 2;
+
+  return Result;
+}
+
+rect GetTileRect(int TileX, int TileY) {
+  rect Result;
+
+  Result.Left = TileX * kTileWidth;
+  Result.Right = (TileX + 1) * kTileWidth;
+  Result.Top = TileY * kTileHeight;
+  Result.Bottom = (TileY + 1) * kTileHeight;
+
+  return Result;
+}
+
+inline bool32 RectsCollide(rect Rect1, rect Rect2) {
+
+  if (Rect1.Right > Rect2.Left && Rect1.Left < Rect2.Right &&
+      Rect1.Bottom > Rect2.Top && Rect1.Top < Rect2.Bottom) {
+    return true;
+  }
+
+  return false;
+}
+
+bool32 EntitiesCollide(entity *Entity1, entity *Entity2) {
+  rect Rect1 = GetBoundingRect(Entity1);
+  rect Rect2 = GetBoundingRect(Entity2);
+
+  return RectsCollide(Rect1, Rect2);
+}
+
+bool32 EntitiesCollide(entity *Entity1, entity *Entity2, int XAdjust, int YAdjust) {
+  rect Rect1 = GetBoundingRect(Entity1);
+  rect Rect2 = GetBoundingRect(Entity2);
+
+  Rect1.Left -= XAdjust;
+  Rect1.Right += XAdjust;
+  Rect1.Top -= YAdjust;
+  Rect1.Bottom += YAdjust;
+
+  Rect2.Left -= XAdjust;
+  Rect2.Right += XAdjust;
+  Rect2.Top -= YAdjust;
+  Rect2.Bottom += YAdjust;
+
+  return RectsCollide(Rect1, Rect2);
+}
+
 bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
   // Tells whether the player can be legitimately
   // placed in its position
 
-  int PersonLeft = (int)Person->X - Person->Width / 2;
-  int PersonRight = (int)Person->X + Person->Width / 2;
-  int PersonTop = (int)Person->Y - Person->Height / 2;
-  int PersonBottom = (int)Person->Y + Person->Height / 2;
+  rect PersonRect = GetBoundingRect(Person);
 
   // Don't go away from the level
-  if (PersonLeft < 0 || PersonTop < 0 ||
-      PersonRight > Level.Width * kTileWidth ||
-      PersonBottom > Level.Height * kTileHeight)
+  if (PersonRect.Left < 0 || PersonRect.Top < 0 ||
+      PersonRect.Right > Level.Width * kTileWidth ||
+      PersonRect.Bottom > Level.Height * kTileHeight)
     return false;
 
   int TileX = ((int)Person->X + Person->Width / 2) / kTileWidth;
@@ -489,13 +542,11 @@ bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
       if (Tile != LVL_BRICK && Tile != LVL_BRICK_HARD) continue;
 
       // Collision check
-      int TileLeft = Col * kTileWidth;
-      int TileRight = (Col + 1) * kTileWidth;
-      int TileTop = Row * kTileHeight;
-      int TileBottom = (Row + 1) * kTileHeight;
-      if (PersonRight > TileLeft && PersonLeft < TileRight &&
-          PersonBottom > TileTop && PersonTop < TileBottom)
+      rect TileRect = GetTileRect(Col, Row);
+
+      if (RectsCollide(PersonRect, TileRect)) {
         return false;
+      }
     }
   }
 
@@ -503,12 +554,7 @@ bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
   for (int i = 0; i < Level.EnemyCount; i++) {
     enemy *Enemy = &Level.Enemies[i];
     if (Enemy == (enemy *)Person) continue;
-    int EnemyLeft = Enemy->X - Enemy->Width / 2;
-    int EnemyRight = Enemy->X + Enemy->Width / 2;
-    int EnemyTop = Enemy->Y - Enemy->Height / 2;
-    int EnemyBottom = Enemy->Y + Enemy->Height / 2;
-    if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
-        PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
+    if (EntitiesCollide(Enemy, Person)) {
       return false;
     }
   }
@@ -516,7 +562,7 @@ bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
   if (IsEnemy) {
     // Do not fall through player-made pits
     if (CheckTile(Person->TileX, Person->TileY) == LVL_BLANK_TMP &&
-        PersonBottom > (Person->TileY + 1) * kTileWidth) {
+        PersonRect.Bottom > (Person->TileY + 1) * kTileWidth) {
       return false;
     }
   }
@@ -890,23 +936,15 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
 
   // Check for collisions with enemies
   if (Person->BumpCooldown <= 0) {
-    // Use a larger bounding rect
-    const int kRectAdjust = 4;
-
-    int PersonLeft = Person->X - Person->Width / 2 - kRectAdjust;
-    int PersonRight = Person->X + Person->Width / 2 + kRectAdjust;
-    int PersonTop = Person->Y - Person->Height / 2;
-    int PersonBottom = Person->Y + Person->Height / 2;
 
     for (int i = 0; i < Level.EnemyCount; i++) {
       enemy *Enemy = &Level.Enemies[i];
       if (Enemy == (enemy *)Person) continue;
-      int EnemyLeft = Enemy->X - Enemy->Width / 2 - kRectAdjust;
-      int EnemyRight = Enemy->X + Enemy->Width / 2 + kRectAdjust;
-      int EnemyTop = Enemy->Y - Enemy->Height / 2;
-      int EnemyBottom = Enemy->Y + Enemy->Height / 2;
-      if (PersonRight > EnemyLeft && PersonLeft < EnemyRight &&
-          PersonBottom > EnemyTop && PersonTop < EnemyBottom) {
+
+      // Use a larger bounding rect
+      const int kRectAdjust = 4;
+
+      if (EntitiesCollide(Person, Enemy, kRectAdjust, 0)) {
         Person->BumpCooldown = 40;
         Enemy->BumpCooldown = 20;
 
@@ -1335,28 +1373,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         DrawTile(Brick->TileX, Brick->TileY - 1);
         DrawTile(Brick->TileX, Brick->TileY);
 
-        int TileLeft = Brick->TileX * kTileWidth;
-        int TileRight = (Brick->TileX + 1) * kTileWidth;
-        int TileTop = Brick->TileY * kTileHeight;
-        int TileBottom = (Brick->TileY + 1) * kTileHeight;
+        rect TileRect = GetTileRect(Brick->TileX, Brick->TileY);
 
         // See if we've killed someone
         for (int e = 0; e < Level.EnemyCount; e++) {
           enemy *Enemy = &Level.Enemies[e];
 
-          if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
-            Enemy->IsDead = true;
-            break;
-          }
-
-          // @copypaste - maybe put in a function?
-          int EnemyLeft = (int)Enemy->X - Enemy->Width / 2;
-          int EnemyRight = (int)Enemy->X + Enemy->Width / 2;
-          int EnemyTop = (int)Enemy->Y - Enemy->Height / 2;
-          int EnemyBottom = (int)Enemy->Y + Enemy->Height / 2;
-
-          if (EnemyRight > TileLeft && EnemyLeft < TileRight &&
-              EnemyBottom > TileTop && EnemyTop < TileBottom) {
+          rect EnemyRect = GetBoundingRect(Enemy);
+          if (RectsCollide(EnemyRect, TileRect)) {
             Enemy->IsDead = true;
             break;
           }

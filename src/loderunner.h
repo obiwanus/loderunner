@@ -146,6 +146,13 @@ typedef enum {
   DOWN,
 } direction;
 
+struct rect {
+  int Top;
+  int Bottom;
+  int Left;
+  int Right;
+};
+
 struct entity {
   union {
     v2i Position;
@@ -209,8 +216,6 @@ struct enemy : person {
 };
 
 struct treasure : entity {
-  int TileX;
-  int TileY;
   bool32 IsCollected;
 };
 
