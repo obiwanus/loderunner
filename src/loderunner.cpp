@@ -1049,6 +1049,18 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     }
   }
   if (Person->FireCooldown > 0) Person->FireCooldown--;
+
+  // Death?
+  if (!IsEnemy) {
+    int kRectAdjust = 5;
+    for (int enemy_num = 0; enemy_num <= Level.EnemyCount; enemy_num++) {
+      enemy *Enemy = &Level.Enemies[enemy_num];
+      if (EntitiesCollide(Person, Enemy, -kRectAdjust, -kRectAdjust)) {
+        Person->IsDead = true;
+        gClock = false;
+      }
+    }
+  }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -1388,8 +1400,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
         for (int p = 0; p < Level.PlayerCount; p++) {
           player *Player = &Level.Players[p];
-          if (Player->TileX == Brick->TileX && Player->TileY == Brick->TileY) {
+          rect PlayerRect = GetBoundingRect(Player);
+          if (RectsCollide(PlayerRect, TileRect)) {
             Player->IsDead = true;
+            gClock = false;
           }
         }
 
