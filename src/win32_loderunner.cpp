@@ -16,6 +16,8 @@ global bool GlobalRunning;
 global BITMAPINFO GlobalBitmapInfo;
 global LARGE_INTEGER GlobalPerformanceFrequency;
 global WINDOWPLACEMENT gWindowPlacement = {sizeof(gWindowPlacement)};
+global bool32 gFullscreen;
+global HCURSOR gCursor;
 
 global game_memory GameMemory;
 global game_offscreen_buffer GameBackBuffer;
@@ -76,12 +78,14 @@ void Win32ToggleFullscreen(HWND hwnd) {
                    mi.rcMonitor.bottom - mi.rcMonitor.top,
                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     }
+    gFullscreen = true;
   } else {
     SetWindowLong(hwnd, GWL_STYLE, dwStyle | WS_OVERLAPPEDWINDOW);
     SetWindowPlacement(hwnd, &gWindowPlacement);
     SetWindowPos(hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE |
                                              SWP_NOZORDER | SWP_NOOWNERZORDER |
                                              SWP_FRAMECHANGED);
+    gFullscreen = false;
   }
 }
 
@@ -149,6 +153,14 @@ Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       OutputDebugStringA("WM_PAINT\n");
 
       EndPaint(hwnd, &Paint);
+    } break;
+
+    case WM_SETCURSOR: {
+      if (gFullscreen) {
+        SetCursor(0);
+      } else {
+        SetCursor(gCursor);
+      }
     } break;
 
     case WM_SYSKEYDOWN:
@@ -320,6 +332,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   WindowClass.lpfnWndProc = Win32WindowProc;
   WindowClass.hInstance = hInstance;
   WindowClass.lpszClassName = "loderunnerWindowClass";
+  gCursor = LoadCursor(0, IDC_ARROW);
+  WindowClass.hCursor = gCursor;
 
   // TODO: query monitor refresh rate
   int TargetFPS = 60;

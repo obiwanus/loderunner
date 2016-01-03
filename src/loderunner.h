@@ -1,3 +1,6 @@
+#ifndef LODERUNNER_H
+#define LODERUNNER_H
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +13,7 @@ void *GameMemoryAlloc(int SizeInBytes);
 
 struct game_offscreen_buffer {
   void *Memory;
+  int StartOffset;  // a byte offset specifying the top left corner
   int Width;
   int Height;
   int BytesPerPixel;
@@ -254,7 +258,9 @@ struct level {
   int EnemyCount;
   int TreasureCount;
   int TreasuresCollected;
+  bool32 IsDrawn;
   bool32 HasStarted;
+  int StartCountdown;
   tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   water_point WaterMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   int DirectionMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
@@ -291,3 +297,5 @@ typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 GAME_UPDATE_AND_RENDER(GameUpdateAndRenderStub) {
   // nothing
 }
+
+#endif  // LODERUNNER_H

@@ -1,4 +1,5 @@
 #include "loderunner.h"
+#include "loderunner_levels.cpp"
 
 // These are saved as global vars on the first call of GameUpdateAndRender
 global game_offscreen_buffer *GameBackBuffer;
@@ -8,10 +9,13 @@ global bool32 gClock = true;
 
 global player gPlayers[2];
 global enemy *gEnemies;
+global int gLevelIndex = 0;
+global int gLevelCount;
 
 global treasure *gTreasures;
 
-global v2i gRespawns[4];
+global const int kMaxRespawnCount = 4;
+global v2i gRespawns[kMaxRespawnCount];
 global int gRespawnCount;
 
 global level *Level;
@@ -25,8 +29,8 @@ global int kHumanWidth = 24;
 global int kHumanHeight = 32;
 
 global const int kCrushedBrickCount = 30;
-global crushed_brick CrushedBricks[kCrushedBrickCount];
-global int NextBrickAvailable = 0;
+global crushed_brick gCrushedBricks[kCrushedBrickCount];
+global int gNextBrickAvailable = 0;
 
 void *GameMemoryAlloc(int SizeInBytes) {
   void *Result = GameMemory->Free;
@@ -63,8 +67,8 @@ internal void DrawRectangle(v2i Position, int Width, int Height, u32 Color) {
   int Y = Position.y;
 
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
-  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
-            X * GameBackBuffer->BytesPerPixel;
+  u8 *Row = (u8 *)GameBackBuffer->Memory + GameBackBuffer->StartOffset +
+            Pitch * Y + X * GameBackBuffer->BytesPerPixel;
 
   for (int pY = Y; pY < Y + Height; pY++) {
     u32 *Pixel = (u32 *)Row;
@@ -77,8 +81,8 @@ internal void DrawRectangle(v2i Position, int Width, int Height, u32 Color) {
 
 inline void SetPixel(int X, int Y, u32 Color) {
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
-  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
-            X * GameBackBuffer->BytesPerPixel;
+  u8 *Row = (u8 *)GameBackBuffer->Memory + GameBackBuffer->StartOffset +
+            Pitch * Y + X * GameBackBuffer->BytesPerPixel;
   u32 *Pixel = (u32 *)Row;
   *Pixel = Color;
 }
@@ -96,8 +100,8 @@ internal void DrawSprite(v2i Position, int Width, int Height, int XOffset,
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
   int SrcPitch = gImage->Width;
 
-  u8 *Row = (u8 *)GameBackBuffer->Memory + Pitch * Y +
-            X * GameBackBuffer->BytesPerPixel;
+  u8 *Row = (u8 *)GameBackBuffer->Memory + GameBackBuffer->StartOffset +
+            Pitch * Y + X * GameBackBuffer->BytesPerPixel;
   u32 *BottomLeftCorner =
       (u32 *)Image->Bitmap + Image->Width * (Image->Height - 1);
   u32 *SrcRow = BottomLeftCorner - SrcPitch * YOffset + XOffset;
@@ -731,8 +735,8 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       Person->FireCooldown = 30;
 
       // Remember that
-      crushed_brick *Brick = &CrushedBricks[NextBrickAvailable];
-      NextBrickAvailable = (NextBrickAvailable + 1) % kCrushedBrickCount;
+      crushed_brick *Brick = &gCrushedBricks[gNextBrickAvailable];
+      gNextBrickAvailable = (gNextBrickAvailable + 1) % kCrushedBrickCount;
 
       Assert(Brick->IsUsed == false);
 
@@ -766,6 +770,139 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
   if (Person->FireCooldown > 0) Person->FireCooldown--;
 }
 
+void LoadLevel(int Index) {
+  // Zero everything
+  *Level = {};
+  gPlayers[0] = {};
+  gPlayers[1] = {};
+  for (int i = 0; i < kCrushedBrickCount; i++) {
+    gCrushedBricks[i] = {};
+  }
+  gRespawnCount = 0;
+  for (int i = 0; i < kMaxRespawnCount; i++) {
+    gRespawns[i] = {};
+  }
+
+  const char *LevelString = LEVELS[Index];
+
+  // Get level info
+  int MaxWidth = 0;
+  int Width = 0;
+  int Height = 1;
+
+  int i = 0;
+  char Symbol = LevelString[0];
+
+  while (Symbol != '\0') {
+    Symbol = LevelString[i];
+    i++;
+
+    if (Symbol == '\n') {
+      if (MaxWidth < Width) {
+        MaxWidth = Width;
+      }
+      Width = 0;
+      Height += 1;
+    } else if (Symbol != '\r') {
+      Width += 1;
+    }
+    if (Symbol == 'p') {
+      Level->PlayerCount++;
+    }
+    if (Symbol == 'e') {
+      Level->EnemyCount++;
+    }
+    if (Symbol == 't') {
+      Level->TreasureCount++;
+    }
+  }
+
+  Level->Width = MaxWidth;
+  Level->Height = Height;
+  Level->StartCountdown = 30;
+
+  // Allocate memory for enemies and treasures
+  gEnemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level->EnemyCount);
+  gTreasures =
+      (treasure *)GameMemoryAlloc(sizeof(treasure) * Level->TreasureCount);
+
+  // Read level data
+  {
+    int Column = 0;
+    int Row = 0;
+    int EnemyNum = 0;
+    int TreasureNum = 0;
+
+    i = 0;
+    Symbol = LevelString[0];
+
+    while (Symbol != '\0') {
+      Symbol = LevelString[i];
+      i++;
+
+      tile_type Value = LVL_BLANK;
+
+      if (Symbol == '|')
+        Value = LVL_WIN_LADDER;
+      else if (Symbol == 't') {
+        Value = LVL_BLANK;
+        treasure *Treasure = &gTreasures[TreasureNum];
+        TreasureNum++;
+        *Treasure = {};  // zero everything
+        Treasure->TileX = Column;
+        Treasure->TileY = Row;
+        Treasure->Width = kTileWidth;
+        Treasure->Height = kTileHeight;
+        Treasure->X = Treasure->TileX * kTileWidth;
+        Treasure->Y = Treasure->TileY * kTileHeight;
+      } else if (Symbol == 'r') {
+        Value = LVL_RESPAWN;
+        gRespawns[gRespawnCount] = {Column, Row};
+        gRespawnCount++;
+      } else if (Symbol == '=')
+        Value = LVL_BRICK;
+      else if (Symbol == '+')
+        Value = LVL_BRICK_HARD;
+      else if (Symbol == '#')
+        Value = LVL_LADDER;
+      else if (Symbol == '-')
+        Value = LVL_ROPE;
+      else if (Symbol == 'e') {
+        Value = LVL_BLANK;
+        enemy *Enemy = &gEnemies[EnemyNum];
+        EnemyNum++;
+        *Enemy = {};  // zero everything
+        Enemy->TileX = Column;
+        Enemy->TileY = Row;
+        Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
+        Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
+      } else if (Symbol == 'p') {
+        Value = LVL_BLANK;
+        player *Player = &gPlayers[0];
+        if (Player->IsActive) {
+          Player = &gPlayers[1];
+        }
+        *Player = {};  // zero everything
+        Player->IsActive = true;
+        Player->TileX = Column;
+        Player->TileY = Row;
+        Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
+        Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
+      }
+
+      if (Symbol == '\n') {
+        Column = 0;
+        ++Row;
+      } else if (Symbol != '\r') {
+        Assert(Column < Level->Width);
+        Assert(Row < Level->Height);
+        Level->Contents[Row][Column] = Value;
+        ++Column;
+      }
+    }
+  }
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
@@ -779,126 +916,35 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Init level
   if (!Level) {
     Level = (level *)GameMemoryAlloc(sizeof(level));
-    char const *Filename = "levels/level1.txt";
-    file_read_result FileReadResult =
-        GameMemory->DEBUGPlatformReadEntireFile(Filename);
 
-    char *String = (char *)FileReadResult.Memory;
+    gLevelCount = sizeof(LEVELS);
+    gLevelIndex = 0;
 
-    // Get level info
-    int MaxWidth = 0;
-    int Width = 0;
-    int Height = 1;
-    for (int i = 0; i < FileReadResult.MemorySize; i++) {
-      char Symbol = String[i];
-      if (Symbol == '\n') {
-        if (MaxWidth < Width) {
-          MaxWidth = Width;
-        }
-        Width = 0;
-        Height += 1;
-      } else if (Symbol != '\r') {
-        Width += 1;
-      }
-      if (Symbol == 'p') {
-        Level->PlayerCount++;
-      }
-      if (Symbol == 'e') {
-        Level->EnemyCount++;
-      }
-      if (Symbol == 't') {
-        Level->TreasureCount++;
-      }
-    }
-    Level->Width = MaxWidth;
-    Level->Height = Height;
-
-    // Allocate memory for enemies and treasures
-    gEnemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level->EnemyCount);
-    gTreasures =
-        (treasure *)GameMemoryAlloc(sizeof(treasure) * Level->TreasureCount);
-
-    // Read level data
-    {
-      int Column = 0;
-      int Row = 0;
-      int EnemyNum = 0;
-      int TreasureNum = 0;
-
-      for (int i = 0; i < FileReadResult.MemorySize; i++) {
-        char Symbol = String[i];
-        tile_type Value = LVL_BLANK;
-
-        if (Symbol == '|')
-          Value = LVL_WIN_LADDER;
-        else if (Symbol == 't') {
-          Value = LVL_BLANK;
-          treasure *Treasure = &gTreasures[TreasureNum];
-          TreasureNum++;
-          *Treasure = {};  // zero everything
-          Treasure->TileX = Column;
-          Treasure->TileY = Row;
-          Treasure->Width = kTileWidth;
-          Treasure->Height = kTileHeight;
-          Treasure->X = Treasure->TileX * kTileWidth;
-          Treasure->Y = Treasure->TileY * kTileHeight;
-        } else if (Symbol == 'r') {
-          Value = LVL_RESPAWN;
-          gRespawns[gRespawnCount] = {Column, Row};
-          gRespawnCount++;
-        } else if (Symbol == '=')
-          Value = LVL_BRICK;
-        else if (Symbol == '+')
-          Value = LVL_BRICK_HARD;
-        else if (Symbol == '#')
-          Value = LVL_LADDER;
-        else if (Symbol == '-')
-          Value = LVL_ROPE;
-        else if (Symbol == 'e') {
-          Value = LVL_BLANK;
-          enemy *Enemy = &gEnemies[EnemyNum];
-          EnemyNum++;
-          *Enemy = {};  // zero everything
-          Enemy->TileX = Column;
-          Enemy->TileY = Row;
-          Enemy->X = Enemy->TileX * kTileWidth + kTileWidth / 2;
-          Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
-        } else if (Symbol == 'p') {
-          Value = LVL_BLANK;
-          player *Player = &gPlayers[0];
-          if (Player->IsActive) {
-            Player = &gPlayers[1];
-          }
-          *Player = {};  // zero everything
-          Player->IsActive = true;
-          Player->TileX = Column;
-          Player->TileY = Row;
-          Player->X = Player->TileX * kTileWidth + kTileWidth / 2;
-          Player->Y = Player->TileY * kTileHeight + kTileHeight / 2;
-        }
-
-        if (Symbol == '\n') {
-          Column = 0;
-          ++Row;
-        } else if (Symbol != '\r') {
-          Assert(Column < Level->Width);
-          Assert(Row < Level->Height);
-          Level->Contents[Row][Column] = Value;
-          ++Column;
-        }
-      }
-    }
+    LoadLevel(gLevelIndex);
   }
 
-  if (RedrawLevel) {
-    DrawRectangle({0, 0}, GameBackBuffer->Width, GameBackBuffer->Height,
-                  0x000A0D0B);
+  if (RedrawLevel || !Level->IsDrawn) {
+    // Fill background
+    u32 *Pixel = (u32 *)GameBackBuffer->Memory;
+    for (int i = 0; i < GameBackBuffer->Width * GameBackBuffer->Height; i++) {
+      *Pixel++ = 0x000A0D0B;
+    }
+
+    // Set the offset to draw in the centre
+    {
+      int Left = (GameBackBuffer->Width - Level->Width * kTileWidth) / 2;
+      int Top = (GameBackBuffer->Height - Level->Height * kTileHeight) / 2;
+      GameBackBuffer->StartOffset =
+          (Top * GameBackBuffer->Width + Left) * GameBackBuffer->BytesPerPixel;
+    }
 
     for (int Row = 0; Row < Level->Height; ++Row) {
       for (int Col = 0; Col < Level->Width; ++Col) {
         DrawTile(Col, Row);
       }
     }
+
+    Level->IsDrawn = true;
   }
 
   // Init players
@@ -1055,8 +1101,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 #endif
 
     if (!Level->HasStarted) {
+      if (Level->StartCountdown > 0) {
+        Level->StartCountdown--;
+      }
       for (int button = 0; button < INPUT_BUTTON_COUNT; button++) {
-        if (Input->Buttons[button].EndedDown) {
+        if (Input->Buttons[button].EndedDown && Level->StartCountdown <= 0) {
           Level->HasStarted = true;
           break;
         }
@@ -1244,7 +1293,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Process and draw bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
-    crushed_brick *Brick = &CrushedBricks[i];
+    crushed_brick *Brick = &gCrushedBricks[i];
     if (!Brick->IsUsed) {
       continue;
     }
@@ -1380,6 +1429,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
               }
             }
           }
+          gLevelIndex++;
+          if (gLevelCount == gLevelIndex) {
+            exit(0);
+          }
+          LoadLevel(gLevelIndex);
+          return;
         }
       }
     }
