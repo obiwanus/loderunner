@@ -209,7 +209,8 @@ internal bmp_file *LoadSprite(char const *Filename) {
 
 internal bool32 CanGoThroughTile(int TileX, int TileY) {
   tile_type Tile = CheckTile(TileX, TileY);
-  if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_INVALID) {
+  if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_BLANK_TMP ||
+      Tile == LVL_INVALID) {
     return false;
   } else {
     return true;
@@ -774,7 +775,6 @@ void LoadLevel(int Index) {
   char Symbol = LevelString[0];
 
   while ((Symbol = LevelString[i++]) != '\0') {
-
     if (Symbol == '\n') {
       if (MaxWidth < Width) {
         MaxWidth = Width;
@@ -815,7 +815,6 @@ void LoadLevel(int Index) {
     Symbol = LevelString[0];
 
     while ((Symbol = LevelString[i++]) != '\0') {
-
       tile_type Value = LVL_BLANK;
 
       if (Symbol == '|')
