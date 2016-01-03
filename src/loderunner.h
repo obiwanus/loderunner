@@ -251,19 +251,38 @@ typedef enum {
   WATERMAP_WATER,
 } water_point;
 
+const int kCrushedBrickCount = 30;
+const int kMaxRespawnCount = 4;
+
 struct level {
-  int Width;
-  int Height;
-  int PlayerCount;
-  int EnemyCount;
-  int TreasureCount;
-  int TreasuresCollected;
+  bool32 IsInitialized;
   bool32 IsDrawn;
   bool32 HasStarted;
   int StartCountdown;
+  int Index;
+
+  int Width;  // in tiles
+  int Height;
+
+  int PlayerCount;
+  player Players[2];
+
+  int EnemyCount;
+  enemy *Enemies;
+
+  int TreasureCount;
+  treasure *Treasures;
+  int TreasuresCollected;
+
   tile_type Contents[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   water_point WaterMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
   int DirectionMap[MAX_LEVEL_HEIGHT][MAX_LEVEL_WIDTH];
+
+  crushed_brick CrushedBricks[kCrushedBrickCount];
+  int NextCrushedBrickAvailable;
+
+  int RespawnCount;
+  v2i Respawns[kMaxRespawnCount];
 };
 
 // -----------------------------------------------------------

@@ -7,18 +7,7 @@ global game_memory *GameMemory;
 
 global bool32 gClock = true;
 
-global player gPlayers[2];
-global enemy *gEnemies;
-global int gLevelIndex = 0;
-global int gLevelCount;
-
-global treasure *gTreasures;
-
-global const int kMaxRespawnCount = 4;
-global v2i gRespawns[kMaxRespawnCount];
-global int gRespawnCount;
-
-global level *Level;
+global level Level;
 global bmp_file *gImage;
 
 global bool32 gDebug = false;
@@ -27,10 +16,6 @@ global int kTileWidth = 32;
 global int kTileHeight = 32;
 global int kHumanWidth = 24;
 global int kHumanHeight = 32;
-
-global const int kCrushedBrickCount = 30;
-global crushed_brick gCrushedBricks[kCrushedBrickCount];
-global int gNextBrickAvailable = 0;
 
 void *GameMemoryAlloc(int SizeInBytes) {
   void *Result = GameMemory->Free;
@@ -152,21 +137,21 @@ internal void DrawSprite(v2i Position, int Width, int Height, int XOffset,
 }
 
 tile_type CheckTile(int Col, int Row) {
-  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+  if (Row < 0 || Row >= Level.Height || Col < 0 || Col >= Level.Width) {
     return LVL_INVALID;
   }
-  return Level->Contents[Row][Col];
+  return Level.Contents[Row][Col];
 }
 
 void SetTile(int Col, int Row, tile_type Value) {
-  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+  if (Row < 0 || Row >= Level.Height || Col < 0 || Col >= Level.Width) {
     return;  // Invalid tile
   }
-  Level->Contents[Row][Col] = Value;
+  Level.Contents[Row][Col] = Value;
 }
 
 void DrawTile(int Col, int Row) {
-  if (Col < 0 || Row < 0 || Col >= Level->Width || Row >= Level->Height) {
+  if (Col < 0 || Row < 0 || Col >= Level.Width || Row >= Level.Height) {
     // Don't draw outside level boundaries
     return;
   }
@@ -242,16 +227,16 @@ bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
 
   // Don't go away from the level
   if (PersonLeft < 0 || PersonTop < 0 ||
-      PersonRight > Level->Width * kTileWidth ||
-      PersonBottom > Level->Height * kTileHeight)
+      PersonRight > Level.Width * kTileWidth ||
+      PersonBottom > Level.Height * kTileHeight)
     return false;
 
   int TileX = ((int)Person->X + Person->Width / 2) / kTileWidth;
   int TileY = ((int)Person->Y + Person->Width / 2) / kTileHeight;
   int StartCol = (TileX <= 0) ? 0 : TileX - 1;
-  int EndCol = (TileX >= Level->Width - 1) ? TileX : TileX + 1;
+  int EndCol = (TileX >= Level.Width - 1) ? TileX : TileX + 1;
   int StartRow = (TileY <= 0) ? 0 : TileY - 1;
-  int EndRow = (TileY >= Level->Height - 1) ? TileY : TileY + 1;
+  int EndRow = (TileY >= Level.Height - 1) ? TileY : TileY + 1;
 
   for (int Row = StartRow; Row <= EndRow; Row++) {
     for (int Col = StartCol; Col <= EndCol; Col++) {
@@ -270,8 +255,8 @@ bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
   }
 
   // Collisions with enemies
-  for (int i = 0; i < Level->EnemyCount; i++) {
-    enemy *Enemy = &gEnemies[i];
+  for (int i = 0; i < Level.EnemyCount; i++) {
+    enemy *Enemy = &Level.Enemies[i];
     if (Enemy == (enemy *)Person) continue;
     int EnemyLeft = Enemy->X - Enemy->Width / 2;
     int EnemyRight = Enemy->X + Enemy->Width / 2;
@@ -295,27 +280,27 @@ bool32 AcceptableMove(person *Person, bool32 IsEnemy) {
 }
 
 inline void SetWMapPoint(int Col, int Row, water_point Point) {
-  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+  if (Row < 0 || Row >= Level.Height || Col < 0 || Col >= Level.Width) {
     Assert(0);
     return;
   }
-  Level->WaterMap[Row][Col] = Point;
+  Level.WaterMap[Row][Col] = Point;
 }
 
 inline water_point CheckWMapPoint(int Col, int Row) {
-  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+  if (Row < 0 || Row >= Level.Height || Col < 0 || Col >= Level.Width) {
     return WATERMAP_OBSTACLE;
   }
-  return Level->WaterMap[Row][Col];
+  return Level.WaterMap[Row][Col];
 }
 
 inline void SetDMapPoint(int Col, int Row, int X, int Y) {
-  if (Row < 0 || Row >= Level->Height || Col < 0 || Col >= Level->Width) {
+  if (Row < 0 || Row >= Level.Height || Col < 0 || Col >= Level.Width) {
     Assert(0);
     return;
   }
-  int Value = Y * Level->Width + X;
-  Level->DirectionMap[Row][Col] = Value;
+  int Value = Y * Level.Width + X;
+  Level.DirectionMap[Row][Col] = Value;
 }
 
 #define DM_TARGET -1
@@ -323,26 +308,26 @@ inline void SetDMapPoint(int Col, int Row, int X, int Y) {
 
 void FindPath(enemy *Enemy, player *Player) {
   // NOTE: -1 works with memset, but -2 would not
-  memset(Level->DirectionMap, -1, sizeof(Level->DirectionMap));
-  memset(Level->WaterMap, 0, sizeof(Level->WaterMap));
+  memset(Level.DirectionMap, -1, sizeof(Level.DirectionMap));
+  memset(Level.WaterMap, 0, sizeof(Level.WaterMap));
 
-  Level->DirectionMap[Player->TileY][Player->TileX] = DM_TARGET;
+  Level.DirectionMap[Player->TileY][Player->TileX] = DM_TARGET;
 
   // Pre-fill watermap with obstacles
-  for (int Row = 0; Row < Level->Height; Row++) {
-    for (int Col = 0; Col < Level->Width; Col++) {
+  for (int Row = 0; Row < Level.Height; Row++) {
+    for (int Col = 0; Col < Level.Width; Col++) {
       if (!CanGoThroughTile(Col, Row)) {
         SetWMapPoint(Col, Row, WATERMAP_OBSTACLE);
       }
     }
   }
-  Level->WaterMap[Player->TileY][Player->TileX] = WATERMAP_WATER;
+  Level.WaterMap[Player->TileY][Player->TileX] = WATERMAP_WATER;
 
   bool32 NewPathFound = false;
   int Iteration = 0;
   while (Iteration++ < MAX_PATH_LENGTH) {
-    for (int Row = 0; Row < Level->Height; Row++) {
-      for (int Col = 0; Col < Level->Width; Col++) {
+    for (int Row = 0; Row < Level.Height; Row++) {
+      for (int Col = 0; Col < Level.Width; Col++) {
         if (CheckWMapPoint(Col, Row) != WATERMAP_WATER) continue;
 
         int X = Col;
@@ -417,9 +402,9 @@ void FindPath(enemy *Enemy, player *Player) {
     int X = Enemy->TileX;
     int Y = Enemy->TileY;
     for (int i = 0; i < MAX_PATH_LENGTH; i++) {
-      int NextStep = Level->DirectionMap[Y][X];
-      X = NextStep % Level->Width;
-      Y = NextStep / Level->Width;
+      int NextStep = Level.DirectionMap[Y][X];
+      X = NextStep % Level.Width;
+      Y = NextStep / Level.Width;
       Enemy->Path[i].x = X;
       Enemy->Path[i].y = Y;
       if (X == Player->TileX && Y == Player->TileY) {
@@ -526,7 +511,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
 
   // Adjust in a player-made pit
   if (Person->IsFalling && !WasFalling) {
-    for (int i = Person->TileY + 1; i < Level->Height; i++) {
+    for (int i = Person->TileY + 1; i < Level.Height; i++) {
       if (CheckTile(Person->TileX, i) == LVL_BLANK_TMP) {
         Person->X = Person->TileX * kTileWidth + kTileWidth / 2;
         break;
@@ -657,8 +642,8 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     int PersonTop = Person->Y - Person->Height / 2;
     int PersonBottom = Person->Y + Person->Height / 2;
 
-    for (int i = 0; i < Level->EnemyCount; i++) {
-      enemy *Enemy = &gEnemies[i];
+    for (int i = 0; i < Level.EnemyCount; i++) {
+      enemy *Enemy = &Level.Enemies[i];
       if (Enemy == (enemy *)Person) continue;
       int EnemyLeft = Enemy->X - Enemy->Width / 2 - kRectAdjust;
       int EnemyRight = Enemy->X + Enemy->Width / 2 + kRectAdjust;
@@ -730,13 +715,15 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       Person->X += AdjustPersonX;
 
       // Crush the brick
-      Level->Contents[TileY][TileX] = LVL_BLANK_TMP;
+      Level.Contents[TileY][TileX] = LVL_BLANK_TMP;
       DrawTile(TileX, TileY);
       Person->FireCooldown = 30;
 
       // Remember that
-      crushed_brick *Brick = &gCrushedBricks[gNextBrickAvailable];
-      gNextBrickAvailable = (gNextBrickAvailable + 1) % kCrushedBrickCount;
+      crushed_brick *Brick =
+          &Level.CrushedBricks[Level.NextCrushedBrickAvailable];
+      Level.NextCrushedBrickAvailable =
+          (Level.NextCrushedBrickAvailable + 1) % kCrushedBrickCount;
 
       Assert(Brick->IsUsed == false);
 
@@ -772,16 +759,9 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
 
 void LoadLevel(int Index) {
   // Zero everything
-  *Level = {};
-  gPlayers[0] = {};
-  gPlayers[1] = {};
-  for (int i = 0; i < kCrushedBrickCount; i++) {
-    gCrushedBricks[i] = {};
-  }
-  gRespawnCount = 0;
-  for (int i = 0; i < kMaxRespawnCount; i++) {
-    gRespawns[i] = {};
-  }
+  Level = {};
+  Level.IsInitialized = true;
+  Level.Index = Index;
 
   const char *LevelString = LEVELS[Index];
 
@@ -793,9 +773,7 @@ void LoadLevel(int Index) {
   int i = 0;
   char Symbol = LevelString[0];
 
-  while (Symbol != '\0') {
-    Symbol = LevelString[i];
-    i++;
+  while ((Symbol = LevelString[i++]) != '\0') {
 
     if (Symbol == '\n') {
       if (MaxWidth < Width) {
@@ -807,24 +785,24 @@ void LoadLevel(int Index) {
       Width += 1;
     }
     if (Symbol == 'p') {
-      Level->PlayerCount++;
+      Level.PlayerCount++;
     }
     if (Symbol == 'e') {
-      Level->EnemyCount++;
+      Level.EnemyCount++;
     }
     if (Symbol == 't') {
-      Level->TreasureCount++;
+      Level.TreasureCount++;
     }
   }
 
-  Level->Width = MaxWidth;
-  Level->Height = Height;
-  Level->StartCountdown = 30;
+  Level.Width = MaxWidth;
+  Level.Height = Height;
+  Level.StartCountdown = 30;
 
   // Allocate memory for enemies and treasures
-  gEnemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level->EnemyCount);
-  gTreasures =
-      (treasure *)GameMemoryAlloc(sizeof(treasure) * Level->TreasureCount);
+  Level.Enemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level.EnemyCount);
+  Level.Treasures =
+      (treasure *)GameMemoryAlloc(sizeof(treasure) * Level.TreasureCount);
 
   // Read level data
   {
@@ -836,9 +814,7 @@ void LoadLevel(int Index) {
     i = 0;
     Symbol = LevelString[0];
 
-    while (Symbol != '\0') {
-      Symbol = LevelString[i];
-      i++;
+    while ((Symbol = LevelString[i++]) != '\0') {
 
       tile_type Value = LVL_BLANK;
 
@@ -846,7 +822,7 @@ void LoadLevel(int Index) {
         Value = LVL_WIN_LADDER;
       else if (Symbol == 't') {
         Value = LVL_BLANK;
-        treasure *Treasure = &gTreasures[TreasureNum];
+        treasure *Treasure = &Level.Treasures[TreasureNum];
         TreasureNum++;
         *Treasure = {};  // zero everything
         Treasure->TileX = Column;
@@ -857,8 +833,8 @@ void LoadLevel(int Index) {
         Treasure->Y = Treasure->TileY * kTileHeight;
       } else if (Symbol == 'r') {
         Value = LVL_RESPAWN;
-        gRespawns[gRespawnCount] = {Column, Row};
-        gRespawnCount++;
+        Level.Respawns[Level.RespawnCount] = {Column, Row};
+        Level.RespawnCount++;
       } else if (Symbol == '=')
         Value = LVL_BRICK;
       else if (Symbol == '+')
@@ -869,7 +845,7 @@ void LoadLevel(int Index) {
         Value = LVL_ROPE;
       else if (Symbol == 'e') {
         Value = LVL_BLANK;
-        enemy *Enemy = &gEnemies[EnemyNum];
+        enemy *Enemy = &Level.Enemies[EnemyNum];
         EnemyNum++;
         *Enemy = {};  // zero everything
         Enemy->TileX = Column;
@@ -878,9 +854,9 @@ void LoadLevel(int Index) {
         Enemy->Y = Enemy->TileY * kTileHeight + kTileHeight / 2;
       } else if (Symbol == 'p') {
         Value = LVL_BLANK;
-        player *Player = &gPlayers[0];
+        player *Player = &Level.Players[0];
         if (Player->IsActive) {
-          Player = &gPlayers[1];
+          Player = &Level.Players[1];
         }
         *Player = {};  // zero everything
         Player->IsActive = true;
@@ -894,9 +870,9 @@ void LoadLevel(int Index) {
         Column = 0;
         ++Row;
       } else if (Symbol != '\r') {
-        Assert(Column < Level->Width);
-        Assert(Row < Level->Height);
-        Level->Contents[Row][Column] = Value;
+        Assert(Column < Level.Width);
+        Assert(Row < Level.Height);
+        Level.Contents[Row][Column] = Value;
         ++Column;
       }
     }
@@ -914,16 +890,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Init level
-  if (!Level) {
-    Level = (level *)GameMemoryAlloc(sizeof(level));
+  if (!Level.IsInitialized) {
+    Level.Index = 0;
 
-    gLevelCount = sizeof(LEVELS);
-    gLevelIndex = 0;
-
-    LoadLevel(gLevelIndex);
+    LoadLevel(Level.Index);
   }
 
-  if (RedrawLevel || !Level->IsDrawn) {
+  if (RedrawLevel || !Level.IsDrawn) {
     // Fill background
     u32 *Pixel = (u32 *)GameBackBuffer->Memory;
     for (int i = 0; i < GameBackBuffer->Width * GameBackBuffer->Height; i++) {
@@ -932,24 +905,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // Set the offset to draw in the centre
     {
-      int Left = (GameBackBuffer->Width - Level->Width * kTileWidth) / 2;
-      int Top = (GameBackBuffer->Height - Level->Height * kTileHeight) / 2;
+      int Left = (GameBackBuffer->Width - Level.Width * kTileWidth) / 2;
+      int Top = (GameBackBuffer->Height - Level.Height * kTileHeight) / 2;
       GameBackBuffer->StartOffset =
           (Top * GameBackBuffer->Width + Left) * GameBackBuffer->BytesPerPixel;
     }
 
-    for (int Row = 0; Row < Level->Height; ++Row) {
-      for (int Col = 0; Col < Level->Width; ++Col) {
+    for (int Row = 0; Row < Level.Height; ++Row) {
+      for (int Col = 0; Col < Level.Width; ++Col) {
         DrawTile(Col, Row);
       }
     }
 
-    Level->IsDrawn = true;
+    Level.IsDrawn = true;
   }
 
   // Init players
   for (int i = 0; i < 2; i++) {
-    player *Player = &gPlayers[i];
+    player *Player = &Level.Players[i];
     if (Player->IsInitialized) {
       continue;
     }
@@ -1012,8 +985,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Init enemies
-  for (int i = 0; i < Level->EnemyCount; i++) {
-    enemy *Enemy = &gEnemies[i];
+  for (int i = 0; i < Level.EnemyCount; i++) {
+    enemy *Enemy = &Level.Enemies[i];
     if (Enemy->IsInitialized) {
       continue;
     }
@@ -1073,7 +1046,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Update players
   for (int i = 0; i < 2; i++) {
-    player *Player = &gPlayers[i];
+    player *Player = &Level.Players[i];
     if (!Player->IsActive) {
       continue;
     }
@@ -1100,18 +1073,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
 #endif
 
-    if (!Level->HasStarted) {
-      if (Level->StartCountdown > 0) {
-        Level->StartCountdown--;
+    if (!Level.HasStarted) {
+      if (Level.StartCountdown > 0) {
+        Level.StartCountdown--;
       }
       for (int button = 0; button < INPUT_BUTTON_COUNT; button++) {
-        if (Input->Buttons[button].EndedDown && Level->StartCountdown <= 0) {
-          Level->HasStarted = true;
+        if (Input->Buttons[button].EndedDown && Level.StartCountdown <= 0) {
+          Level.HasStarted = true;
           break;
         }
       }
     }
-    if (!Level->HasStarted) break;
+    if (!Level.HasStarted) break;
 
     bool32 IsEnemy = false;
     UpdatePerson(Player, IsEnemy, Speed, PressedUp, PressedDown, PressedLeft,
@@ -1119,10 +1092,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Update enemies
-  for (int i = 0; i < Level->EnemyCount; i++) {
-    enemy *Enemy = &gEnemies[i];
+  for (int i = 0; i < Level.EnemyCount; i++) {
+    enemy *Enemy = &Level.Enemies[i];
 
-    if (!Level->HasStarted) break;
+    if (!Level.HasStarted) break;
 
     ErasePerson(Enemy);
 
@@ -1137,7 +1110,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->ParalyseCooldown = 0;
       Enemy->ParalyseImmunityCooldown = 0;
 
-      v2i Position = gRespawns[randint(gRespawnCount)];
+      v2i Position = Level.Respawns[randint(Level.RespawnCount)];
 
       Enemy->TileX = Position.x;
       Enemy->TileY = Position.y;
@@ -1161,9 +1134,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         }
       }
       // Choose a player to pursue
-      if (Level->PlayerCount > 1) {
-        player *Player1 = &gPlayers[0];
-        player *Player2 = &gPlayers[1];
+      if (Level.PlayerCount > 1) {
+        player *Player1 = &Level.Players[0];
+        player *Player2 = &Level.Players[1];
 
         if (Abs(Player1->TileX - Enemy->TileX) +
                 Abs(Player1->TileY - Enemy->TileY) <
@@ -1174,7 +1147,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Player = Player2;
         }
       } else {
-        Player = &gPlayers[0];
+        Player = &Level.Players[0];
       }
       Enemy->Pursuing = Player;
 
@@ -1248,9 +1221,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Enemy->ParalyseCooldown <= 0) {
       if (randint(100) < 8) {
         bool32 AnotherTreasureOccupiesThisTile = false;
-        for (int j = 0; j < Level->TreasureCount; j++) {
+        for (int j = 0; j < Level.TreasureCount; j++) {
           if (Enemy->CarriesTreasure == j) continue;
-          treasure *AnotherTreasure = &gTreasures[j];
+          treasure *AnotherTreasure = &Level.Treasures[j];
           if (AnotherTreasure->IsCollected) continue;
           if (AnotherTreasure->TileX == Enemy->TileX &&
               AnotherTreasure->TileY == Enemy->TileY) {
@@ -1258,7 +1231,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           }
         }
         if (!AnotherTreasureOccupiesThisTile) {
-          treasure *Treasure = &gTreasures[Enemy->CarriesTreasure];
+          treasure *Treasure = &Level.Treasures[Enemy->CarriesTreasure];
           Treasure->IsCollected = false;
           Treasure->X = Enemy->X;
           Treasure->Y = Enemy->TileY * kTileHeight;
@@ -1271,7 +1244,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // If in a pit, drop the treasure
     if (Enemy->CarriesTreasure >= 0 && Enemy->IsParalysed) {
-      treasure *Treasure = &gTreasures[Enemy->CarriesTreasure];
+      treasure *Treasure = &Level.Treasures[Enemy->CarriesTreasure];
       Treasure->IsCollected = false;
       Treasure->TileX = Enemy->TileX;
       Treasure->TileY = Enemy->TileY - 1;
@@ -1293,7 +1266,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
   // Process and draw bricks
   for (int i = 0; i < kCrushedBrickCount; i++) {
-    crushed_brick *Brick = &gCrushedBricks[i];
+    crushed_brick *Brick = &Level.CrushedBricks[i];
     if (!Brick->IsUsed) {
       continue;
     }
@@ -1356,8 +1329,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         int TileBottom = (Brick->TileY + 1) * kTileHeight;
 
         // See if we've killed someone
-        for (int e = 0; e < Level->EnemyCount; e++) {
-          enemy *Enemy = &gEnemies[e];
+        for (int e = 0; e < Level.EnemyCount; e++) {
+          enemy *Enemy = &Level.Enemies[e];
 
           if (Enemy->TileX == Brick->TileX && Enemy->TileY == Brick->TileY) {
             Enemy->IsDead = true;
@@ -1377,8 +1350,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           }
         }
 
-        for (int p = 0; p < Level->PlayerCount; p++) {
-          player *Player = &gPlayers[p];
+        for (int p = 0; p < Level.PlayerCount; p++) {
+          player *Player = &Level.Players[p];
           if (Player->TileX == Brick->TileX && Player->TileY == Brick->TileY) {
             Player->IsDead = true;
           }
@@ -1392,16 +1365,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Update and draw treasures
-  for (int i = 0; i < Level->TreasureCount; i++) {
-    treasure *Treasure = &gTreasures[i];
+  for (int i = 0; i < Level.TreasureCount; i++) {
+    treasure *Treasure = &Level.Treasures[i];
 
     if (Treasure->IsCollected) continue;
 
     const int kCollectMargin = 10;
 
     // Check if it's being collected
-    for (int j = 0; j < Level->EnemyCount; j++) {
-      enemy *Enemy = &gEnemies[j];
+    for (int j = 0; j < Level.EnemyCount; j++) {
+      enemy *Enemy = &Level.Enemies[j];
 
       if (Enemy->CarriesTreasure >= 0) continue;
 
@@ -1413,27 +1386,27 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         }
       }
     }
-    for (int j = 0; j < Level->PlayerCount; j++) {
-      player *Player = &gPlayers[j];
+    for (int j = 0; j < Level.PlayerCount; j++) {
+      player *Player = &Level.Players[j];
       if (Abs(Player->X - (Treasure->X + kTileWidth / 2)) < kCollectMargin &&
           Abs(Player->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMargin) {
         Treasure->IsCollected = true;
-        Level->TreasuresCollected++;
-        if (Level->TreasuresCollected == Level->TreasureCount) {
+        Level.TreasuresCollected++;
+        if (Level.TreasuresCollected == Level.TreasureCount) {
           // All treasures collected
-          for (int Row = 0; Row < Level->Height; Row++) {
-            for (int Col = 0; Col < Level->Width; Col++) {
+          for (int Row = 0; Row < Level.Height; Row++) {
+            for (int Col = 0; Col < Level.Width; Col++) {
               if (CheckTile(Col, Row) == LVL_WIN_LADDER) {
                 SetTile(Col, Row, LVL_LADDER);
                 DrawTile(Col, Row);
               }
             }
           }
-          gLevelIndex++;
-          if (gLevelCount == gLevelIndex) {
+          Level.Index++;
+          if (Level.Index == kLevelCount) {
             exit(0);
           }
-          LoadLevel(gLevelIndex);
+          LoadLevel(Level.Index);
           return;
         }
       }
@@ -1451,9 +1424,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // Check if there's another treasure below - O(n2)
     bool32 TreasureBelow = false;
-    for (int j = 0; j < Level->TreasureCount; j++) {
+    for (int j = 0; j < Level.TreasureCount; j++) {
       if (i == j) continue;
-      treasure *AnotherTreasure = &gTreasures[j];
+      treasure *AnotherTreasure = &Level.Treasures[j];
       if (AnotherTreasure->IsCollected) continue;
       if (Treasure->TileX != AnotherTreasure->TileX) continue;
       int Bottom = Treasure->Y + Treasure->Height;
@@ -1473,15 +1446,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Draw all treasures so they don't blink
-  for (int i = 0; i < Level->TreasureCount; i++) {
-    treasure *Treasure = &gTreasures[i];
+  for (int i = 0; i < Level.TreasureCount; i++) {
+    treasure *Treasure = &Level.Treasures[i];
     if (Treasure->IsCollected) continue;
     DrawSprite(Treasure->Position, kTileWidth, kTileHeight, 96, 96);
   }
 
   if (gDebug) {
-    for (int i = 0; i < Level->EnemyCount; i++) {
-      enemy *Enemy = &gEnemies[i];
+    for (int i = 0; i < Level.EnemyCount; i++) {
+      enemy *Enemy = &Level.Enemies[i];
 
       if (Enemy->PathExists) {
         for (int j = 0; j < Enemy->PathLength - 1; j++) {
@@ -1499,7 +1472,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // We're drawing them in a separate loop so they don't
     // overdraw each other
 
-    player *Player = &gPlayers[p];
+    player *Player = &Level.Players[p];
     if (!Player->IsActive) {
       continue;
     }
@@ -1531,8 +1504,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
 
   // Draw enemies
-  for (int i = 0; i < Level->EnemyCount; i++) {
-    enemy *Enemy = &gEnemies[i];
+  for (int i = 0; i < Level.EnemyCount; i++) {
+    enemy *Enemy = &Level.Enemies[i];
 
     animation *Animation = Enemy->Animation;
     frame *Frame = &Animation->Frames[Animation->Frame];
