@@ -64,6 +64,11 @@ internal void DrawRectangle(v2i Position, int Width, int Height, u32 Color) {
   }
 }
 
+internal void DrawRectangle(int X, int Y, int Width, int Height, u32 Color) {
+  v2i Position = {X, Y};
+  DrawRectangle(Position, Width, Height, Color);
+}
+
 inline void SetPixel(int X, int Y, u32 Color) {
   int Pitch = GameBackBuffer->Width * GameBackBuffer->BytesPerPixel;
   u8 *Row = (u8 *)GameBackBuffer->Memory + GameBackBuffer->StartOffset +
@@ -574,7 +579,6 @@ rect GetTileRect(int TileX, int TileY) {
 }
 
 inline bool32 RectsCollide(rect Rect1, rect Rect2) {
-
   if (Rect1.Right > Rect2.Left && Rect1.Left < Rect2.Right &&
       Rect1.Bottom > Rect2.Top && Rect1.Top < Rect2.Bottom) {
     return true;
@@ -590,7 +594,8 @@ bool32 EntitiesCollide(entity *Entity1, entity *Entity2) {
   return RectsCollide(Rect1, Rect2);
 }
 
-bool32 EntitiesCollide(entity *Entity1, entity *Entity2, int XAdjust, int YAdjust) {
+bool32 EntitiesCollide(entity *Entity1, entity *Entity2, int XAdjust,
+                       int YAdjust) {
   rect Rect1 = GetBoundingRect(Entity1);
   rect Rect2 = GetBoundingRect(Entity2);
 
@@ -1026,7 +1031,6 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
 
   // Check for collisions with enemies
   if (Person->BumpCooldown <= 0) {
-
     for (int i = 0; i < Level.EnemyCount; i++) {
       enemy *Enemy = &Level.Enemies[i];
       if (Enemy == (enemy *)Person) continue;
@@ -1204,10 +1208,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Level.TileBeingDrawn++;
       if (Level.TileBeingDrawn >= Level.Width * Level.Height) {
         Level.IsDrawn = true;
+
         break;
       }
     }
-    return;
+    if (Level.IsDrawn) {
+      // Draw additional stuff
+      int LevelBottomX = Level.Height * kTileHeight + kTileHeight / 4;
+      DrawRectangle(0, LevelBottomX + 2, kTileWidth * Level.Width,
+                    kTileHeight / 2, 0x009C659C);
+      LevelBottomX += kTileHeight - 4;
+      DrawText("score 00010860", 0, LevelBottomX);
+      DrawText("level 01", (Level.Width - 8) * kTileWidth, LevelBottomX);
+    } else {
+      return;
+    }
   }
 
   if (Level.IsDisappearing) {
@@ -1257,9 +1272,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedFire = Input->Fire.EndedDown;
 
     if (Player->IsDead && PressedFire) {
-       gClock = true;
-       Level.IsDisappearing = true;
-       return;
+      gClock = true;
+      Level.IsDisappearing = true;
+      return;
     }
     if (!gClock) return;
 
@@ -1664,10 +1679,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
       if (Enemy->PathExists) {
         for (int j = 0; j < Enemy->PathLength - 1; j++) {
-          v2i PointPosition;
-          PointPosition.x = Enemy->Path[j].x * kTileWidth;
-          PointPosition.y = Enemy->Path[j].y * kTileHeight;
-          DrawRectangle(PointPosition, kTileWidth, kTileHeight, 0x00333333);
+          DrawRectangle(Enemy->Path[j].x * kTileWidth,
+                        Enemy->Path[j].y * kTileHeight, kTileWidth, kTileHeight,
+                        0x00333333);
         }
       }
     }
@@ -1696,10 +1710,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // Debug
     if (gDebug) {
-      v2i TilePosition = {};
-      TilePosition.x = Player->TileX * kTileWidth;
-      TilePosition.y = Player->TileY * kTileWidth;
-      DrawRectangle(TilePosition, kTileWidth, kTileHeight, 0x00333333);
+      DrawRectangle(Player->TileX * kTileWidth, Player->TileY * kTileWidth,
+                    kTileWidth, kTileHeight, 0x00333333);
     }
 
     Frame = &Animation->Frames[Animation->Frame];
@@ -1738,6 +1750,4 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
   }
-
-  DrawText("lode runner 2016", 100, 100);
 }
