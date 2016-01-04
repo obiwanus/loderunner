@@ -267,6 +267,9 @@ struct level {
   int TileBeingDrawn;
   int DrawTilesPerFrame;
 
+  bool32 IsDisappearing;
+  animation Disappearing;
+
   int Width;  // in tiles
   int Height;
 

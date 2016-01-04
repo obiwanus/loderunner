@@ -215,6 +215,15 @@ void LoadLevel(int Index) {
   Level.IsDrawn = false;
   Level.TileBeingDrawn = 0;
 
+  // Init disappearing animation
+  {
+    animation *Animation = &Level.Disappearing;
+    Animation->FrameCount = 3;
+    Animation->Frames[0] = {96, 160, 2};
+    Animation->Frames[1] = {128, 160, 2};
+    Animation->Frames[2] = {160, 160, 2};
+  }
+
   const char *LevelString = LEVELS[Index];
 
   // Get level info
@@ -409,7 +418,6 @@ void LoadLevel(int Index) {
     Enemy->CarriesTreasure = -1;
 
     // Init animations
-    frame *Frames = NULL;
     animation *Animation = NULL;
 
     // Falling
@@ -888,7 +896,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
         if (Level.Index == kLevelCount) {
           exit(0);
         }
-        LoadLevel(Level.Index);
+        Level.IsDisappearing = true;
         return;
       }
     } else {
@@ -1122,6 +1130,33 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     return;
   }
 
+  if (Level.IsDisappearing) {
+    animation *Animation = &Level.Disappearing;
+    frame *Frame = &Animation->Frames[Animation->Frame];
+
+    v2i Position = {};
+    for (int Row = 0; Row < Level.Height; Row++) {
+      for (int Col = 0; Col < Level.Width; Col++) {
+        Position.x = Col * kTileWidth;
+        Position.y = Row * kTileHeight;
+        DrawSprite(Position, kTileWidth, kTileHeight, Frame->XOffset,
+                   Frame->YOffset);
+      }
+    }
+
+    if (Animation->Counter > Frame->Lasting) {
+      Animation->Counter = 0;
+      Animation->Frame++;
+    }
+    Animation->Counter += 1;
+
+    if (Animation->Frame >= Animation->FrameCount) {
+      Level.IsDisappearing = false;
+      LoadLevel(Level.Index);
+    }
+    return;
+  }
+
   // Update players
   for (int i = 0; i < 2; i++) {
     player *Player = &Level.Players[i];
@@ -1143,7 +1178,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     if (Player->IsDead && PressedFire) {
        gClock = true;
-       LoadLevel(Level.Index);
+       Level.IsDisappearing = true;
+       return;
     }
     if (!gClock) return;
 
