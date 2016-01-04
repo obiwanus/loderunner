@@ -706,7 +706,8 @@ void FindPath(enemy *Enemy, player *Player) {
   // Pre-fill watermap with obstacles
   for (int Row = 0; Row < Level.Height; Row++) {
     for (int Col = 0; Col < Level.Width; Col++) {
-      if (!CanGoThroughTile(Col, Row)) {
+      if (!CanGoThroughTile(Col, Row) &&
+          !(Col == Enemy->TileX && Row == Enemy->TileY)) {
         SetWMapPoint(Col, Row, WATERMAP_OBSTACLE);
       }
     }
@@ -1389,6 +1390,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     player *Player = Enemy->Pursuing;
     if (Player == NULL || Enemy->PathCooldown <= 0) {
       if (gDebug) {
+        // Erase old drawn path
         if (Enemy->PathExists) {
           for (int j = 0; j < Enemy->PathLength; j++) {
             DrawTile(Enemy->Path[j].x, Enemy->Path[j].y);
@@ -1414,6 +1416,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Enemy->Pursuing = Player;
 
       FindPath(Enemy, Player);
+
       Enemy->PathCooldown = kPathCooldown;
     }
 
@@ -1421,11 +1424,30 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     // If sees the player directly
     bool32 SeesDirectly = false;
-    if (Player->Y == Enemy->Y && Abs(Player->TileX - Enemy->TileX) <= 2) {
+    if (Player->Y == Enemy->Y && Abs(Player->TileX - Enemy->TileX) <= 3) {
       SeesDirectly = true;
+
+      // Check for obstacles
+      int Step = Player->TileX < Enemy->TileX ? 1 : -1;
+      for (int tile = Player->TileX; tile != Enemy->TileX; tile += Step) {
+        if (!CanGoThroughTile(tile, Player->TileY)) {
+          SeesDirectly = false;
+        }
+      }
+    }
+    if (Player->X == Enemy->X && Abs(Player->TileY - Enemy->TileY) <= 3) {
+      SeesDirectly = true;
+
+      // Check for obstacles
+      int Step = Player->TileY < Enemy->TileY ? 1 : -1;
+      for (int tile = Player->TileY; tile != Enemy->TileY; tile += Step) {
+        if (!CanGoThroughTile(Player->TileX, tile)) {
+          SeesDirectly = false;
+        }
+      }
     }
 
-    if (Enemy->PathExists && Enemy->BumpCooldown <= 0 && !SeesDirectly) {
+    if (Enemy->PathExists && Enemy->BumpCooldown <= 0) {
       v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
       int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
       int TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
@@ -1443,41 +1465,52 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Enemy->PathExists = false;
       }
 
-      int DeltaX = TargetX - Enemy->X;
-      int DeltaY = TargetY - Enemy->Y;
+      if (!SeesDirectly) {
+        int DeltaX = TargetX - Enemy->X;
+        int DeltaY = TargetY - Enemy->Y;
 
-      if (DeltaX > 0) {
-        Enemy->DirectionX = RIGHT;
-      } else {
-        Enemy->DirectionX = LEFT;
-      }
-      if (DeltaY > 0) {
-        Enemy->DirectionY = DOWN;
-      } else {
-        Enemy->DirectionY = UP;
-      }
+        if (DeltaX > 0) {
+          Enemy->DirectionX = RIGHT;
+        } else if (DeltaX < 0) {
+          Enemy->DirectionX = LEFT;
+        } else {
+          Enemy->DirectionX = NOWHERE;
+        }
+        if (DeltaY > 0) {
+          Enemy->DirectionY = DOWN;
+        } else if (DeltaY < 0) {
+          Enemy->DirectionY = UP;
+        } else {
+          Enemy->DirectionY = NOWHERE;
+        }
 
-      if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER &&
-          Abs(DeltaY) <= 1 && Abs(DeltaX) > 2) {
-        Enemy->DirectionY = NOWHERE;
+        if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER &&
+            Abs(DeltaY) <= 1 && Abs(DeltaX) > 2) {
+          Enemy->DirectionY = NOWHERE;
+        }
       }
     }
 
     if (SeesDirectly) {
       // Grab him!
 
+      // @copypaste from above
       int DeltaX = Player->X - Enemy->X;
       int DeltaY = Player->Y - Enemy->Y;
 
       if (DeltaX > 0) {
         Enemy->DirectionX = RIGHT;
-      } else {
+      } else if (DeltaX < 0) {
         Enemy->DirectionX = LEFT;
+      } else {
+        Enemy->DirectionX = NOWHERE;
       }
       if (DeltaY > 0) {
         Enemy->DirectionY = DOWN;
-      } else {
+      } else if (DeltaY < 0) {
         Enemy->DirectionY = UP;
+      } else {
+        Enemy->DirectionY = NOWHERE;
       }
     }
 
