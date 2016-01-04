@@ -172,6 +172,86 @@ void DrawTile(int Col, int Row) {
   }
 }
 
+void DrawText(char *String, int X, int Y) {
+  v2i Position = {};
+  Position.x = X;
+  Position.y = Y;
+  v2i Offset = {};
+
+  while (*String != '\0') {
+    char c = *String++;
+    bool32 CharFound = true;
+
+    if (c == 'a') {
+      Offset = {96, 192};
+    } else if (c == 'b') {
+      Offset = {128, 192};
+    } else if (c == 'c') {
+      Offset = {160, 192};
+    } else if (c == 'd') {
+      Offset = {192, 192};
+    } else if (c == 'e') {
+      Offset = {224, 192};
+    } else if (c == 'o') {
+      Offset = {96, 224};
+    } else if (c == 'r') {
+      Offset = {128, 224};
+    } else if (c == 'u') {
+      Offset = {160, 224};
+    } else if (c == 'n') {
+      Offset = {192, 224};
+    } else if (c == 'l') {
+      Offset = {224, 224};
+    } else if (c == 'v') {
+      Offset = {96, 256};
+    } else if (c == 's') {
+      Offset = {128, 256};
+    } else if (c == 'i') {
+      Offset = {160, 256};
+    } else if (c == 'f') {
+      Offset = {192, 256};
+    } else if (c == 'y') {
+      Offset = {224, 256};
+    } else if (c == 'k') {
+      Offset = {96, 288};
+    } else if (c == 'p') {
+      Offset = {128, 288};
+    } else if (c == 'm') {
+      Offset = {160, 288};
+    } else if (c == 't') {
+      Offset = {192, 288};
+    } else if (c == '0') {
+      Offset = {96, 320};
+    } else if (c == '1') {
+      Offset = {128, 320};
+    } else if (c == '2') {
+      Offset = {160, 320};
+    } else if (c == '3') {
+      Offset = {192, 320};
+    } else if (c == '4') {
+      Offset = {224, 320};
+    } else if (c == '5') {
+      Offset = {96, 352};
+    } else if (c == '6') {
+      Offset = {128, 352};
+    } else if (c == '7') {
+      Offset = {160, 352};
+    } else if (c == '8') {
+      Offset = {192, 352};
+    } else if (c == '9') {
+      Offset = {224, 352};
+    } else {
+      CharFound = false;
+    }
+
+    if (CharFound) {
+      DrawSprite(Position, kTileWidth, kTileHeight, Offset.x, Offset.y);
+    }
+
+    Position.x += kTileWidth;
+  }
+}
+
 internal bmp_file DEBUGReadBMPFile(char const *Filename) {
   bmp_file Result = {};
   file_read_result FileReadResult =
@@ -1658,4 +1738,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
   }
+
+  DrawText("lode runner 2016", 100, 100);
 }
