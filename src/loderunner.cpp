@@ -1193,11 +1193,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     // Set the offset to draw in the centre
     {
       int Left = (GameBackBuffer->Width - Level.Width * kTileWidth) / 2;
-      int Top = (GameBackBuffer->Height - Level.Height * kTileHeight) / 2;
+      int Top =
+          (GameBackBuffer->Height - ((Level.Height + 2) * kTileHeight)) / 2;
       GameBackBuffer->StartOffset =
           (Top * GameBackBuffer->Width + Left) * GameBackBuffer->BytesPerPixel;
     }
   }
+
+  bool32 DrawFooter = false;
 
   if (RedrawLevel) {
     // Draw the whole level in one go
@@ -1206,6 +1209,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         DrawTile(Col, Row);
       }
     }
+    DrawFooter = true;
   }
 
   if (!Level.IsDrawn) {
@@ -1217,25 +1221,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Level.TileBeingDrawn++;
       if (Level.TileBeingDrawn >= Level.Width * Level.Height) {
         Level.IsDrawn = true;
-
+        DrawFooter = true;
         break;
       }
     }
-    if (Level.IsDrawn) {
-      // Draw additional stuff
-      int LevelBottomY = Level.Height * kTileHeight + kTileHeight / 4;
-      DrawRectangle(0, LevelBottomY + 2, kTileWidth * Level.Width,
-                    kTileHeight / 2, 0x009C659C);
-      LevelBottomY += kTileHeight - 4;
-      DrawText("score", 0, LevelBottomY);
-      DrawText("level", (Level.Width - 8) * kTileWidth, LevelBottomY);
-
-      char LevelString[3] = "00";
-      LevelString[2] = 0;
-      LevelString[1] = (char)('0' + (Level.Index + 1) % 10);
-      LevelString[0] = (char)('0' + ((Level.Index + 1) / 10) % 10);
-      DrawText(LevelString, (Level.Width - 2) * kTileWidth, LevelBottomY);
-    } else {
+    if (!Level.IsDrawn) {
+      // if still not drawn
       return;
     }
   }
@@ -1267,9 +1258,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     return;
   }
 
+  if (DrawFooter) {
+    int LevelBottomY = Level.Height * kTileHeight + kTileHeight / 4;
+    DrawRectangle(0, LevelBottomY + 2, kTileWidth * Level.Width,
+                  kTileHeight / 2, 0x009C659C);
+    LevelBottomY += kTileHeight - 4;
+    DrawText("score", 0, LevelBottomY);
+    DrawText("level", (Level.Width - 8) * kTileWidth, LevelBottomY);
+
+    char LevelString[3] = "00";
+    LevelString[2] = 0;
+    LevelString[1] = (char)('0' + (Level.Index + 1) % 10);
+    LevelString[0] = (char)('0' + ((Level.Index + 1) / 10) % 10);
+    DrawText(LevelString, (Level.Width - 2) * kTileWidth, LevelBottomY);
+    gUpdateScore = true;
+  }
+
   // Draw score
-  if (gUpdateScore)
-  {
+  if (gUpdateScore) {
     gUpdateScore = false;
     const int MaxScore = 99999999;
     if (gScore > MaxScore) {
