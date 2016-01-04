@@ -261,10 +261,11 @@ const int kMaxRespawnCount = 4;
 
 struct level {
   bool32 IsInitialized;
-  bool32 IsDrawn;
   bool32 HasStarted;
-  int StartCountdown;
   int Index;
+  bool32 IsDrawn;
+  int TileBeingDrawn;
+  int DrawTilesPerFrame;
 
   int Width;  // in tiles
   int Height;

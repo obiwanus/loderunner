@@ -415,6 +415,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         // Set up proper values of buffers based on actual client size
         Win32ResizeClientWindow(Window);
+        gRedrawLevel = false;
       }
 
       // Get space for inputs

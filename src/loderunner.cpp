@@ -212,6 +212,8 @@ void LoadLevel(int Index) {
   Level = {};
   Level.IsInitialized = true;
   Level.Index = Index;
+  Level.IsDrawn = false;
+  Level.TileBeingDrawn = 0;
 
   const char *LevelString = LEVELS[Index];
 
@@ -245,8 +247,8 @@ void LoadLevel(int Index) {
   }
 
   Level.Width = MaxWidth;
+  Level.DrawTilesPerFrame = Level.Width / 4;
   Level.Height = Height;
-  Level.StartCountdown = 30;
 
   // Allocate memory for enemies and treasures
   Level.Enemies = (enemy *)GameMemoryAlloc(sizeof(enemy) * Level.EnemyCount);
@@ -1080,7 +1082,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     LoadLevel(Level.Index);
   }
 
-  if (RedrawLevel || !Level.IsDrawn) {
+  if (RedrawLevel || (!Level.IsDrawn && Level.TileBeingDrawn == 0)) {
     // Fill background
     u32 *Pixel = (u32 *)GameBackBuffer->Memory;
     for (int i = 0; i < GameBackBuffer->Width * GameBackBuffer->Height; i++) {
@@ -1094,14 +1096,30 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       GameBackBuffer->StartOffset =
           (Top * GameBackBuffer->Width + Left) * GameBackBuffer->BytesPerPixel;
     }
+  }
 
+  if (RedrawLevel) {
+    // Draw the whole level in one go
     for (int Row = 0; Row < Level.Height; ++Row) {
       for (int Col = 0; Col < Level.Width; ++Col) {
         DrawTile(Col, Row);
       }
     }
+  }
 
-    Level.IsDrawn = true;
+  if (!Level.IsDrawn) {
+    // Draw the level line by line
+    for (int i = 0; i < Level.DrawTilesPerFrame; i++) {
+      int Col = Level.TileBeingDrawn % Level.Width;
+      int Row = Level.TileBeingDrawn / Level.Width;
+      DrawTile(Col, Row);
+      Level.TileBeingDrawn++;
+      if (Level.TileBeingDrawn >= Level.Width * Level.Height) {
+        Level.IsDrawn = true;
+        break;
+      }
+    }
+    return;
   }
 
   // Update players
@@ -1140,11 +1158,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 #endif
 
     if (!Level.HasStarted) {
-      if (Level.StartCountdown > 0) {
-        Level.StartCountdown--;
-      }
       for (int button = 0; button < INPUT_BUTTON_COUNT; button++) {
-        if (Input->Buttons[button].EndedDown && Level.StartCountdown <= 0) {
+        if (Input->Buttons[button].EndedDown) {
           Level.HasStarted = true;
           // Prevent player from disappearing
           Player->Animation = &Player->Falling;
