@@ -9,6 +9,8 @@ global bool32 gClock = true;
 
 global level Level;
 global bmp_file *gImage;
+global i32 gScore;
+global bool32 gUpdateScore = true;
 
 global bool32 gDebug = false;
 
@@ -101,7 +103,6 @@ internal void DrawSprite(v2i Position, int Width, int Height, int XOffset,
     int *SrcPixel = (int *)SrcRow;
 
     for (int pX = X; pX < X + Width; pX++) {
-      // TODO: bmp may not be masked
       u8 Red = UnmaskColor(*SrcPixel, Image->RedMask);
       u8 Green = UnmaskColor(*SrcPixel, Image->GreenMask);
       u8 Blue = UnmaskColor(*SrcPixel, Image->BlueMask);
@@ -299,6 +300,7 @@ void LoadLevel(int Index) {
   Level.Index = Index;
   Level.IsDrawn = false;
   Level.TileBeingDrawn = 0;
+  gUpdateScore = true;
 
   // Init disappearing animation
   {
@@ -810,6 +812,11 @@ void ErasePerson(person *Person) {
   }
 }
 
+void AddScore(int Value) {
+  gScore += Value;
+  gUpdateScore = true;
+}
+
 void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
                   bool32 PressedDown, bool32 PressedLeft, bool32 PressedRight,
                   bool32 PressedFire, bool32 Turbo) {
@@ -981,6 +988,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
         if (Level.Index == kLevelCount) {
           exit(0);
         }
+        AddScore(Level.EnemyCount * Level.TreasureCount * 10);
         Level.IsDisappearing = true;
         return;
       }
@@ -1152,6 +1160,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       if (EntitiesCollide(Person, Enemy, -kRectAdjust, -kRectAdjust)) {
         Person->IsDead = true;
         gClock = false;
+        AddScore(-150);
       }
     }
   }
@@ -1214,12 +1223,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
     if (Level.IsDrawn) {
       // Draw additional stuff
-      int LevelBottomX = Level.Height * kTileHeight + kTileHeight / 4;
-      DrawRectangle(0, LevelBottomX + 2, kTileWidth * Level.Width,
+      int LevelBottomY = Level.Height * kTileHeight + kTileHeight / 4;
+      DrawRectangle(0, LevelBottomY + 2, kTileWidth * Level.Width,
                     kTileHeight / 2, 0x009C659C);
-      LevelBottomX += kTileHeight - 4;
-      DrawText("score 00010860", 0, LevelBottomX);
-      DrawText("level 01", (Level.Width - 8) * kTileWidth, LevelBottomX);
+      LevelBottomY += kTileHeight - 4;
+      DrawText("score", 0, LevelBottomY);
+      DrawText("level", (Level.Width - 8) * kTileWidth, LevelBottomY);
+
+      char LevelString[3] = "00";
+      LevelString[2] = 0;
+      LevelString[1] = (char)('0' + (Level.Index + 1) % 10);
+      LevelString[0] = (char)('0' + ((Level.Index + 1) / 10) % 10);
+      DrawText(LevelString, (Level.Width - 2) * kTileWidth, LevelBottomY);
     } else {
       return;
     }
@@ -1250,6 +1265,29 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       LoadLevel(Level.Index);
     }
     return;
+  }
+
+  // Draw score
+  if (gUpdateScore)
+  {
+    gUpdateScore = false;
+    const int MaxScore = 99999999;
+    if (gScore > MaxScore) {
+      gScore = MaxScore;
+    }
+    if (gScore < 0) {
+      gScore = 0;
+    }
+    char String[9] = "00000000";
+    int i = 7;  // last digit index
+    int value = gScore;
+    while (i >= 0) {
+      String[i] = (char)('0' + value % 10);
+      value /= 10;
+      i--;
+    }
+    DrawText(String, 6 * kTileWidth,
+             Level.Height * kTileHeight + kTileHeight / 4 + kTileHeight - 4);
   }
 
   // Update players
@@ -1319,6 +1357,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     int kPathCooldown = 30;
 
     if (Enemy->IsDead) {
+      AddScore(10);
+
       Enemy->IsDead = false;
       Enemy->IsParalysed = false;
       Enemy->ParalyseCooldown = 0;
@@ -1450,6 +1490,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (!Enemy->IsParalysed && Enemy->ParalyseImmunityCooldown <= 0 &&
         CheckTile(Enemy->TileX, Enemy->TileY) == LVL_BLANK_TMP) {
       Enemy->IsParalysed = true;
+      AddScore(5);
       Enemy->ParalyseCooldown = 4 * 60;
     }
 
@@ -1580,6 +1621,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           if (RectsCollide(PlayerRect, TileRect)) {
             Player->IsDead = true;
             gClock = false;
+            AddScore(-150);
           }
         }
 
@@ -1618,6 +1660,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Abs(Player->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMargin) {
         Treasure->IsCollected = true;
         Level.TreasuresCollected++;
+        AddScore(25);
         if (Level.TreasuresCollected == Level.TreasureCount) {
           // All treasures collected
           Level.AllTreasuresCollected = true;
