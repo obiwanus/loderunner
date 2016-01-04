@@ -236,7 +236,7 @@ void LoadLevel(int Index) {
     if (Symbol == 'p') {
       Level.PlayerCount++;
     }
-    if (Symbol == 'e') {
+    if (Symbol == 'e' || Symbol == 'E') {
       Level.EnemyCount++;
     }
     if (Symbol == 't') {
@@ -293,8 +293,8 @@ void LoadLevel(int Index) {
         Value = LVL_LADDER;
       else if (Symbol == '-')
         Value = LVL_ROPE;
-      else if (Symbol == 'e') {
-        Value = LVL_BLANK;
+      else if (Symbol == 'e' || Symbol == 'E') {
+        Value = Symbol == 'e' ? LVL_BLANK : LVL_WIN_LADDER;
         enemy *Enemy = &Level.Enemies[EnemyNum];
         EnemyNum++;
         *Enemy = {};  // zero everything
