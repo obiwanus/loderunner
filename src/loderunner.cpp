@@ -165,7 +165,7 @@ void DrawTile(int Col, int Row) {
   Position.x = (Col * kTileWidth);
   Position.y = (Row * kTileHeight);
   int Value = CheckTile(Col, Row);
-  if (Value == LVL_BRICK) {
+  if (Value == LVL_BRICK || Value == LVL_BRICK_FAKE) {
     DrawSprite(Position, kTileWidth, kTileHeight, 160, 96);
   } else if (Value == LVL_BRICK_HARD) {
     DrawSprite(Position, kTileWidth, kTileHeight, 128, 96);
@@ -385,6 +385,8 @@ void LoadLevel(int Index) {
         Value = LVL_BRICK;
       else if (Symbol == '+')
         Value = LVL_BRICK_HARD;
+      else if (Symbol == 'f')
+        Value = LVL_BRICK_FAKE;
       else if (Symbol == 'd')
         Value = LVL_BLANK_TMP;
       else if (Symbol == '#')
@@ -551,7 +553,7 @@ void LoadLevel(int Index) {
 internal bool32 CanGoThroughTile(int TileX, int TileY) {
   tile_type Tile = CheckTile(TileX, TileY);
   if (Tile == LVL_BRICK || Tile == LVL_BRICK_HARD || Tile == LVL_BLANK_TMP ||
-      Tile == LVL_INVALID) {
+      Tile == LVL_INVALID || Tile == LVL_BRICK_FAKE) {
     return false;
   } else {
     return true;
@@ -1690,7 +1692,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 AcceptableMove =
         BottomTile != LVL_BRICK && BottomTile != LVL_BRICK_HARD &&
         BottomTile != LVL_LADDER && BottomTile != LVL_INVALID &&
-        BottomTile != LVL_BLANK_TMP;
+        BottomTile != LVL_BLANK_TMP && BottomTile != LVL_BRICK_FAKE;
 
     // Check if there's another treasure below - O(n2)
     bool32 TreasureBelow = false;
