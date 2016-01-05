@@ -12,7 +12,7 @@ global bmp_file *gImage;
 global i32 gScore;
 global bool32 gUpdateScore = true;
 
-global bool32 gDebug = true;
+global bool32 gDebug = false;
 
 global int kTileWidth = 32;
 global int kTileHeight = 32;
@@ -881,7 +881,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     int RopeY = Person->TileY * kTileHeight;
     int PersonTop = Person->Y - Person->Height / 2;
     Person->OnRope = (PersonTop == RopeY) ||
-             (RopeY - PersonTop > 0 && RopeY - PersonTop <= 3);
+                     (RopeY - PersonTop > 0 && RopeY - PersonTop <= 3);
     // Adjust Person on a rope
     if (Person->OnRope) {
       Person->Y = RopeY + Person->Height / 2;
@@ -978,8 +978,10 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     int PlayerTile = CheckTile(Person->TileX, Person->TileY);
     int PersonBottom = (int)Person->Y + Person->Height / 2;
 
-    bool32 GotFlying = (PlayerTile == LVL_BLANK || PlayerTile == LVL_ROPE) &&
-                       (PersonBottom < (Person->TileY + 1) * kTileHeight);
+    bool32 GotFlying =
+        (PlayerTile == LVL_BLANK || PlayerTile == LVL_WIN_LADDER ||
+         PlayerTile == LVL_ROPE) &&
+        (PersonBottom < (Person->TileY + 1) * kTileHeight);
 
     if (!AcceptableMove(Person, IsEnemy) || GotFlying && !Turbo) {
       Person->Y = Old;
@@ -1515,7 +1517,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
 
       // Don't fall from ropes when not needed
-      if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_ROPE && Abs(Player->Y - Enemy->Y) <= 2) {
+      if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_ROPE &&
+          Abs(Player->Y - Enemy->Y) <= 2) {
         Enemy->DirectionY = UP;
       }
     }
