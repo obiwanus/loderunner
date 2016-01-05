@@ -995,7 +995,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
         if (Level.Index == kLevelCount) {
           exit(0);
         }
-        AddScore(Level.EnemyCount * Level.TreasureCount * 10);
+        AddScore(Level.EnemyCount * Level.TreasureCount * 100);
         Level.IsDisappearing = true;
         return;
       }
@@ -1167,7 +1167,6 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       if (EntitiesCollide(Person, Enemy, -kRectAdjust, -kRectAdjust)) {
         Person->IsDead = true;
         gClock = false;
-        AddScore(-150);
       }
     }
   }
@@ -1323,6 +1322,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedFire = Input->Fire.EndedDown;
 
     if (Player->IsDead && PressedFire) {
+      AddScore(-2150);
       gClock = true;
       Level.IsDisappearing = true;
       return;
@@ -1370,7 +1370,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     int kPathCooldown = 30;
 
     if (Enemy->IsDead) {
-      AddScore(10);
+      AddScore(245);
 
       Enemy->IsDead = false;
       Enemy->IsParalysed = false;
@@ -1542,7 +1542,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (!Enemy->IsParalysed && Enemy->ParalyseImmunityCooldown <= 0 &&
         CheckTile(Enemy->TileX, Enemy->TileY) == LVL_BLANK_TMP) {
       Enemy->IsParalysed = true;
-      AddScore(5);
+      AddScore(185);
       Enemy->ParalyseCooldown = 4 * 60;
     }
 
@@ -1673,7 +1673,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           if (RectsCollide(PlayerRect, TileRect)) {
             Player->IsDead = true;
             gClock = false;
-            AddScore(-150);
           }
         }
 
@@ -1712,7 +1711,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Abs(Player->Y - (Treasure->Y + kTileHeight / 2)) < kCollectMargin) {
         Treasure->IsCollected = true;
         Level.TreasuresCollected++;
-        AddScore(25);
+        AddScore(305);
         if (Level.TreasuresCollected == Level.TreasureCount) {
           // All treasures collected
           Level.AllTreasuresCollected = true;

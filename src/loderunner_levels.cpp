@@ -1,6 +1,6 @@
 #include "loderunner.h"
 
-const int kLevelCount = 20;
+const int kLevelCount = 20;  // more than needed
 
 const char *LEVELS[kLevelCount] = {
 
