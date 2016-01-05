@@ -189,6 +189,7 @@ struct person : entity {
   int BumpCooldown;
   bool32 CanClimb;
   bool32 CanDescend;
+  bool32 OnRope;
 
   direction Going;
   direction DirectionX;

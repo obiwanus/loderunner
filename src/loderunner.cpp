@@ -12,7 +12,7 @@ global bmp_file *gImage;
 global i32 gScore;
 global bool32 gUpdateScore = true;
 
-global bool32 gDebug = false;
+global bool32 gDebug = true;
 
 global int kTileWidth = 32;
 global int kTileHeight = 32;
@@ -876,14 +876,14 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     Person->CanClimb = Abs(Person->X - LadderCenter) < (Person->Width / 3);
   }
 
-  bool32 OnRope = false;
+  Person->OnRope = false;
   if (CheckTile(Person->TileX, Person->TileY) == LVL_ROPE) {
     int RopeY = Person->TileY * kTileHeight;
     int PersonTop = Person->Y - Person->Height / 2;
-    OnRope = (PersonTop == RopeY) ||
+    Person->OnRope = (PersonTop == RopeY) ||
              (RopeY - PersonTop > 0 && RopeY - PersonTop <= 3);
     // Adjust Person on a rope
-    if (OnRope) {
+    if (Person->OnRope) {
       Person->Y = RopeY + Person->Height / 2;
     }
   }
@@ -895,7 +895,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     int Old = Person->Y;
     Person->Y += Speed;
     if (!AcceptableMove(Person, IsEnemy) || OnLadder || LadderBelow || Turbo ||
-        OnRope) {
+        Person->OnRope) {
       Person->Y = Old;
       Person->IsFalling = false;
     } else {
@@ -922,7 +922,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     if (!AcceptableMove(Person, IsEnemy)) {
       Person->X = Old;
     } else {
-      if (!OnRope) {
+      if (!Person->OnRope) {
         Person->Animation = &Person->GoingRight;
       } else {
         Person->Animation = &Person->RopeRight;
@@ -948,7 +948,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     if (!AcceptableMove(Person, IsEnemy)) {
       Person->X = Old;
     } else {
-      if (!OnRope) {
+      if (!Person->OnRope) {
         Person->Animation = &Person->GoingLeft;
       } else {
         Person->Animation = &Person->RopeLeft;
@@ -1003,7 +1003,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
   }
 
   Person->CanDescend = false;
-  if (Person->CanClimb || LadderBelow || OnRope || Turbo) {
+  if (Person->CanClimb || LadderBelow || Person->OnRope || Turbo) {
     int Old = Person->Y;
     Person->Y += Speed;
     if (AcceptableMove(Person, IsEnemy)) {
@@ -1447,13 +1447,36 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
+    if (SeesDirectly) {
+      // Grab him!
+
+      // @copypaste
+      int DeltaX = Player->X - Enemy->X;
+      int DeltaY = Player->Y - Enemy->Y;
+
+      if (DeltaX > 0) {
+        Enemy->DirectionX = RIGHT;
+      } else if (DeltaX < 0) {
+        Enemy->DirectionX = LEFT;
+      } else {
+        Enemy->DirectionX = NOWHERE;
+      }
+      if (DeltaY > 0) {
+        Enemy->DirectionY = DOWN;
+      } else if (DeltaY < 0) {
+        Enemy->DirectionY = UP;
+      } else {
+        Enemy->DirectionY = NOWHERE;
+      }
+    }
+
     if (Enemy->PathExists && Enemy->BumpCooldown <= 0) {
       v2i NextPoint = Enemy->Path[Enemy->PathPointIndex];
       int TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
       int TargetY = NextPoint.y * kTileHeight + kTileHeight / 2;
 
       // If reached the point
-      if (Abs(TargetX - Enemy->X) <= 4 && Abs(TargetY - Enemy->Y) <= 1) {
+      if (Abs(TargetX - Enemy->X) <= 4 && Abs(TargetY - Enemy->Y) <= 4) {
         Enemy->PathPointIndex++;
         NextPoint = Enemy->Path[Enemy->PathPointIndex];
         TargetX = NextPoint.x * kTileWidth + kTileWidth / 2;
@@ -1484,33 +1507,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           Enemy->DirectionY = NOWHERE;
         }
 
+        // Get off ladders easily if needed
         if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_LADDER &&
             Abs(DeltaY) <= 1 && Abs(DeltaX) > 2) {
           Enemy->DirectionY = NOWHERE;
         }
       }
-    }
 
-    if (SeesDirectly) {
-      // Grab him!
-
-      // @copypaste from above
-      int DeltaX = Player->X - Enemy->X;
-      int DeltaY = Player->Y - Enemy->Y;
-
-      if (DeltaX > 0) {
-        Enemy->DirectionX = RIGHT;
-      } else if (DeltaX < 0) {
-        Enemy->DirectionX = LEFT;
-      } else {
-        Enemy->DirectionX = NOWHERE;
-      }
-      if (DeltaY > 0) {
-        Enemy->DirectionY = DOWN;
-      } else if (DeltaY < 0) {
+      // Don't fall from ropes when not needed
+      if (CheckTile(Enemy->TileX, Enemy->TileY) == LVL_ROPE && Abs(Player->Y - Enemy->Y) <= 2) {
         Enemy->DirectionY = UP;
-      } else {
-        Enemy->DirectionY = NOWHERE;
       }
     }
 
