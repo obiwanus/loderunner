@@ -248,6 +248,7 @@ typedef enum {
   LVL_WIN_LADDER,
   LVL_ROPE,
   LVL_TREASURE,
+  LVL_TREASURE_HOLDER,
   LVL_RESPAWN,
   LVL_INVALID,
 } tile_type;

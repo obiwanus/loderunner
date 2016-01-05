@@ -387,6 +387,8 @@ void LoadLevel(int Index) {
         Value = LVL_BRICK_HARD;
       else if (Symbol == 'f')
         Value = LVL_BRICK_FAKE;
+      else if (Symbol == 'T')
+        Value = LVL_TREASURE_HOLDER;
       else if (Symbol == 'd')
         Value = LVL_BLANK_TMP;
       else if (Symbol == '#')
@@ -1731,10 +1733,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     int BottomTile = CheckTile(Treasure->TileX,
                                (Treasure->Y + Treasure->Height) / kTileHeight);
 
+    // Treasure doesn't fall through the following tiles
     bool32 AcceptableMove =
         BottomTile != LVL_BRICK && BottomTile != LVL_BRICK_HARD &&
         BottomTile != LVL_LADDER && BottomTile != LVL_INVALID &&
-        BottomTile != LVL_BLANK_TMP && BottomTile != LVL_BRICK_FAKE;
+        BottomTile != LVL_BLANK_TMP && BottomTile != LVL_BRICK_FAKE &&
+        BottomTile != LVL_ROPE && BottomTile != LVL_TREASURE_HOLDER;
 
     // Check if there's another treasure below - O(n2)
     bool32 TreasureBelow = false;
