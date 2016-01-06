@@ -61,7 +61,44 @@ struct bmp_info_header {
   u32 biAlphaMask;
 };
 
+struct WAVE_header {
+  u32 RIFFID;
+  u32 Size;
+  u32 WAVEID;
+};
+
+struct WAVE_chunk {
+  u32 ID;
+  u32 Size;
+};
+
+struct WAVE_fmt {
+  u16 wFormatTag;
+  u16 nChannels;
+  u32 nSamplesPerSec;
+  u32 nAvgBytesPerSec;
+  u16 nBlockAlign;
+  u16 wBitsPerSample;
+  u16 cbSize;
+  u16 wValidBitsPerSample;
+  u32 dwChannelMask;
+  u8 SubFormat[16];
+};
+
 #pragma pack(pop)
+
+#define RIFF_CODE(a, b, c, d) \
+  (((u32)(a) << 0) | ((u32)(b) << 8) | ((u32)(c) << 16) | ((u32)(d) << 24))
+
+enum {
+  WAVE_ChunkID_fmt = RIFF_CODE('f', 'm', 't', ' '),
+  WAVE_ChunkID_RIFF = RIFF_CODE('R', 'I', 'F', 'F'),
+  WAVE_ChunkID_WAVE = RIFF_CODE('W', 'A', 'V', 'E'),
+};
+
+struct loaded_sound {
+
+};
 
 struct sprite {
   bmp_file *Image;

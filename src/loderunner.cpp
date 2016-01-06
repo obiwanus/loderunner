@@ -286,6 +286,27 @@ internal bmp_file DEBUGReadBMPFile(char const *Filename) {
   return Result;
 }
 
+struct riff_iterator {
+  WAVE_chunk *Chunk;
+  u8 *At;
+};
+
+internal loaded_sound ReadWAVFile(char const *Filename) {
+  loaded_sound Result = {};
+
+  file_read_result FileReadResult =
+      GameMemory->DEBUGPlatformReadEntireFile(Filename);
+
+  Assert(FileReadResult.MemorySize > 0);
+
+  WAVE_header *Header = (WAVE_header *)FileReadResult.Memory;
+  Assert(Header->RIFFID == WAVE_ChunkID_RIFF);
+  Assert(Header->WAVEID == WAVE_ChunkID_WAVE);
+
+
+  return Result;
+}
+
 internal bmp_file *LoadSprite(char const *Filename) {
   bmp_file *Result = (bmp_file *)GameMemoryAlloc(sizeof(bmp_file));
   *Result = DEBUGReadBMPFile(Filename);

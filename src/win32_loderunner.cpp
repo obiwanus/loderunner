@@ -4,6 +4,7 @@
 #include <time.h>
 #include <windows.h>
 #include <intrin.h>
+#include <dsound.h>
 
 struct win32_game_code {
   HMODULE GameCodeDLL;
@@ -18,10 +19,13 @@ global LARGE_INTEGER GlobalPerformanceFrequency;
 global WINDOWPLACEMENT gWindowPlacement = {sizeof(gWindowPlacement)};
 global bool32 gFullscreen;
 global HCURSOR gCursor;
+global LPDIRECTSOUNDBUFFER gSoundBuffer;
 
 global game_memory GameMemory;
 global game_offscreen_buffer GameBackBuffer;
 global bool32 gRedrawLevel;
+
+typedef HRESULT WINAPI directsound_create(LPCGUID, LPDIRECTSOUND *, LPUNKNOWN);
 
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
@@ -375,10 +379,62 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DeleteObject(BgBrush);
 
     // Fullscreen by default
-    Win32ToggleFullscreen(Window);
+    // Win32ToggleFullscreen(Window);
 
     if (Window) {
       GlobalRunning = true;
+
+      // Init sound
+      {
+        HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
+        if (DSoundLibrary) {
+          directsound_create *DirectSoundCreate =
+              (directsound_create *)GetProcAddress(DSoundLibrary,
+                                                   "DirectSoundCreate");
+          LPDIRECTSOUND DirectSound;
+          if (DirectSoundCreate &&
+              SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0))) {
+            WAVEFORMATEX WaveFormat = {};
+            WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
+            WaveFormat.nChannels = 2;
+            WaveFormat.nSamplesPerSec = 48000;
+            WaveFormat.wBitsPerSample = 16;
+            WaveFormat.nBlockAlign =
+                (WaveFormat.nChannels * WaveFormat.wBitsPerSample) / 8;
+            WaveFormat.nAvgBytesPerSec =
+                WaveFormat.nSamplesPerSec * WaveFormat.nBlockAlign;
+            WaveFormat.cbSize = 0;
+
+            // Create primary buffer
+            if (SUCCEEDED(
+                    DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY))) {
+              LPDIRECTSOUNDBUFFER PrimaryBuffer;
+              DSBUFFERDESC BufferDescription = {};
+              BufferDescription.dwSize = sizeof(BufferDescription);
+              BufferDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+              if (SUCCEEDED(DirectSound->CreateSoundBuffer(
+                      &BufferDescription, &PrimaryBuffer, 0))) {
+                if (SUCCEEDED(PrimaryBuffer->SetFormat(&WaveFormat))) {
+                  OutputDebugStringA("Primary buffer format was set\n");
+                }
+              }
+            }
+
+            // Create secondary buffer
+            DSBUFFERDESC BufferDescription = {};
+            BufferDescription.dwSize = sizeof(BufferDescription);
+            BufferDescription.dwFlags = 0;
+            BufferDescription.dwBufferBytes = 48000 * sizeof(i16);
+            BufferDescription.lpwfxFormat = &WaveFormat;
+
+            if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription,
+                                                         &gSoundBuffer, 0))) {
+              OutputDebugStringA("Secondary buffer created\n");
+            }
+          }
+        }
+      }
 
       LARGE_INTEGER LastTimestamp = Win32GetWallClock();
 
@@ -440,7 +496,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         Win32ProcessPendingMessages(NewInput);
         NewInput->dtForFrame = TargetMSPF;
 
-        Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory, gRedrawLevel);
+        Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory,
+                             gRedrawLevel);
         if (gRedrawLevel) {
           gRedrawLevel = false;
         }
@@ -460,6 +517,49 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                ButtonNum++) {
             NewPlayerInput->Buttons[ButtonNum].EndedDown =
                 OldPlayerInput->Buttons[ButtonNum].EndedDown;
+          }
+        }
+
+        // DirectSound output test
+        {
+          int SquareWaveCounter = 0;
+          int SquareWavePeriod = 48000 / 256;  // Approx middle C
+          int BytesPerSample = sizeof(i16) * 2;
+
+          DWORD WritePointer = 0;
+          DWORD BytesToWrite = 0;
+
+          VOID *Region1;
+          DWORD Region1Size;
+          VOID *Region2;
+          DWORD Region2Size;
+
+          if (SUCCEEDED(gSoundBuffer->Lock(WritePointer, BytesToWrite, &Region1, &Region1Size,
+                             &Region2, &Region2Size, 0))) {
+            DWORD Region1SampleCount = Region1Size / BytesPerSample;
+            DWORD Region2SampleCount = Region2Size / BytesPerSample;
+
+            i16 *SampleOut = (i16 *)Region1;
+            for (DWORD SampleIndex = 0; SampleIndex < Region1SampleCount; SampleIndex++) {
+              if (SquareWaveCounter <= 0) {
+                SquareWaveCounter = SquareWavePeriod;
+              }
+              i16 SampleValue = SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
+              *SampleOut++ = SampleValue;
+              *SampleOut++ = SampleValue;
+              SquareWaveCounter--;
+            }
+
+            SampleOut = (i16 *)Region2;
+            for (DWORD SampleIndex = 0; SampleIndex < Region2SampleCount; SampleIndex++) {
+              if (SquareWaveCounter <= 0) {
+                SquareWaveCounter = SquareWavePeriod;
+              }
+              i16 SampleValue = SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
+              *SampleOut++ = SampleValue;
+              *SampleOut++ = SampleValue;
+              SquareWaveCounter--;
+            }
           }
         }
 
