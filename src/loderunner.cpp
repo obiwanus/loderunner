@@ -6,10 +6,12 @@ global game_offscreen_buffer *GameBackBuffer;
 global game_memory *GameMemory;
 
 global bool32 gClock = true;
+global bool32 gDeadWait = 0;
 
 global level Level;
 global bmp_file *gImage;
 global game_sound gSound;
+global platform_sound_output *gSoundOutput;
 global i32 gScore;
 global bool32 gUpdateScore = true;
 
@@ -28,6 +30,11 @@ void *GameMemoryAlloc(int SizeInBytes) {
   Assert(CurrentSize < GameMemory->MemorySize);
 
   return Result;
+}
+
+void PlaySound(loaded_sound *Sound) {
+  gSoundOutput->SamplesWritten = -1;
+  gSoundOutput->Playing = Sound;
 }
 
 inline u8 UnmaskColor(u32 Pixel, u32 ColorMask) {
@@ -350,7 +357,9 @@ internal loaded_sound ReadWAVFile(char const *Filename) {
   u32 SampleDataSize = 0;
   WAVE_fmt *fmt = 0;
 
-  for (riff_iterator Iter = ParseChunkAt(Header + 1, (u8 *)(Header + 1) + Header->Size - 4); ChunkIsValid(Iter); Iter = NextChunk(Iter)) {
+  for (riff_iterator Iter =
+           ParseChunkAt(Header + 1, (u8 *)(Header + 1) + Header->Size - 4);
+       ChunkIsValid(Iter); Iter = NextChunk(Iter)) {
     switch (GetChunkType(Iter)) {
       case WAVE_ChunkID_fmt: {
         fmt = (WAVE_fmt *)GetChunkData(Iter);
@@ -913,6 +922,15 @@ void AddScore(int Value) {
   gUpdateScore = true;
 }
 
+void KillPlayer(person *Player) {
+  Player->IsDead = true;
+  gDeadWait = 150;  // 2.5 sec
+  AddScore(-2150);
+  PlaySound(&gSound.Death);
+
+  gClock = false;
+}
+
 void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
                   bool32 PressedDown, bool32 PressedLeft, bool32 PressedRight,
                   bool32 PressedFire, bool32 Turbo) {
@@ -1087,6 +1105,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
           exit(0);
         }
         AddScore(Level.EnemyCount * Level.TreasureCount * 100);
+        PlaySound(&gSound.Win);
         Level.IsDisappearing = true;
         return;
       }
@@ -1212,6 +1231,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
       Level.Contents[TileY][TileX] = LVL_BLANK_TMP;
       DrawTile(TileX, TileY);
       Person->FireCooldown = 30;
+      PlaySound(&gSound.Crush);
 
       // Remember that
       crushed_brick *Brick =
@@ -1256,8 +1276,7 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
     for (int enemy_num = 0; enemy_num < Level.EnemyCount; enemy_num++) {
       enemy *Enemy = &Level.Enemies[enemy_num];
       if (EntitiesCollide(Person, Enemy, -kRectAdjust, -kRectAdjust)) {
-        Person->IsDead = true;
-        gClock = false;
+        KillPlayer(Person);
       }
     }
   }
@@ -1267,8 +1286,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   // Update global vars
   GameBackBuffer = Buffer;
   GameMemory = Memory;
-
-  loaded_sound Sound = ReadWAVFile("death.wav");
 
   // Load sprites
   if (gImage == NULL) {
@@ -1284,6 +1301,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     gSound.Pickup = ReadWAVFile("pickup.wav");
     gSound.Win = ReadWAVFile("win.wav");
   }
+  gSoundOutput = SoundOutput;
 
   // Init level
   if (!Level.IsInitialized) {
@@ -1424,8 +1442,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     bool32 PressedRight = Input->Right.EndedDown;
     bool32 PressedFire = Input->Fire.EndedDown;
 
-    if (Player->IsDead && PressedFire) {
-      AddScore(-2150);
+    bool32 PressedAnyKey =
+        PressedFire || PressedDown || PressedUp || PressedLeft || PressedRight;
+
+    if (gDeadWait > 0) {
+      gDeadWait--;
+    }
+
+    if (Player->IsDead && gDeadWait <= 0) {
       gClock = true;
       Level.IsDisappearing = true;
       return;
@@ -1774,8 +1798,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           player *Player = &Level.Players[p];
           rect PlayerRect = GetBoundingRect(Player);
           if (RectsCollide(PlayerRect, TileRect)) {
-            Player->IsDead = true;
-            gClock = false;
+            KillPlayer(Player);
           }
         }
 
@@ -1815,7 +1838,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         Treasure->IsCollected = true;
         Level.TreasuresCollected++;
         AddScore(305);
+        PlaySound(&gSound.Pickup);
         if (Level.TreasuresCollected == Level.TreasureCount) {
+          PlaySound(&gSound.Hooray);
           // All treasures collected
           Level.AllTreasuresCollected = true;
           for (int Row = 0; Row < Level.Height; Row++) {

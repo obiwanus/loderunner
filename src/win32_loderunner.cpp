@@ -20,6 +20,7 @@ global WINDOWPLACEMENT gWindowPlacement = {sizeof(gWindowPlacement)};
 global bool32 gFullscreen;
 global HCURSOR gCursor;
 global LPDIRECTSOUNDBUFFER gSoundBuffer;
+global platform_sound_output gSoundOutput;
 
 global game_memory GameMemory;
 global game_offscreen_buffer GameBackBuffer;
@@ -277,7 +278,7 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
           GlobalRunning = false;
         }
         if (VKCode == VK_ESCAPE) {
-          GlobalRunning = false;
+          // GlobalRunning = false;
         }
 
         // Get input
@@ -303,8 +304,10 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
           } else if (VKCode == 'E') {
             Win32ProcessKeyboardMessage(&Player2->Fire, IsDown);
           } else if (VKCode == 'X') {
+#if BUILD_INTERNAL
             Win32ProcessKeyboardMessage(&Player1->Turbo, IsDown);
             Win32ProcessKeyboardMessage(&Player2->Turbo, IsDown);
+#endif
           } else if (VKCode == 'I') {
 #if BUILD_INTERNAL
             Win32ProcessKeyboardMessage(&Player1->Debug, IsDown);
@@ -379,7 +382,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DeleteObject(BgBrush);
 
     // Fullscreen by default
-    // Win32ToggleFullscreen(Window);
+    Win32ToggleFullscreen(Window);
 
     if (Window) {
       GlobalRunning = true;
@@ -425,7 +428,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             DSBUFFERDESC BufferDescription = {};
             BufferDescription.dwSize = sizeof(BufferDescription);
             BufferDescription.dwFlags = 0;
-            BufferDescription.dwBufferBytes = 44100 * sizeof(i16);
+            BufferDescription.dwBufferBytes = 44100 * sizeof(i16) * 2;  // 1 second
             BufferDescription.lpwfxFormat = &WaveFormat;
 
             if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription,
@@ -498,7 +501,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         NewInput->dtForFrame = TargetMSPF;
 
         Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory,
-                             gRedrawLevel);
+                             &gSoundOutput, gRedrawLevel);
         if (gRedrawLevel) {
           gRedrawLevel = false;
         }
@@ -521,58 +524,100 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           }
         }
 
-        // DirectSound output test
-        {
-          local_persist u32 RunningSampleIndex = 0;
-          int BufferSize = 44100 * sizeof(i16);
-          int SquareWaveCounter = RunningSampleIndex % BufferSize;
-          int SquareWavePeriod = 44100 / 256;  // Approx middle C
+        // Output sound
+        DWORD PlayCursor;
+        DWORD WriteCursor;
+        if (SUCCEEDED(
+                gSoundBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor))) {
+
           int BytesPerSample = sizeof(i16) * 2;
+          int SamplesPerSecond = 44100;
+          int BufferSize = SamplesPerSecond * BytesPerSample;
+          int SamplesToWrite =
+              (SamplesPerSecond / 60) * 10;  // 10 frames' worth of sound
+          DWORD BytesToWrite = SamplesToWrite * BytesPerSample;
 
+          if (!gSoundOutput.IsInitialized) {
+            gSoundOutput.IsInitialized = true;
+            gSoundOutput.LastWritePosition = WriteCursor;
+          }
 
-          DWORD PlayCursor;
-          DWORD WriteCursor;
-          bool32 PositionFound = SUCCEEDED(
-              gSoundBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor));
+          int BytesPassed = 0;
+          DWORD LastCursor = gSoundOutput.LastWritePosition;
+          if (WriteCursor < LastCursor) {
+            BytesPassed = BufferSize - LastCursor + WriteCursor;
+            Assert(BytesPassed > 0);
+          } else {
+            BytesPassed = WriteCursor - LastCursor;
+          }
+          int SamplesPassed = BytesPassed / BytesPerSample;
+          gSoundOutput.LastWritePosition = WriteCursor;
 
-          DWORD BytesToWrite = BufferSize;
-          DWORD ByteToLock = RunningSampleIndex * BytesPerSample % BufferSize;
+          if (gSoundOutput.Playing != NULL) {
+            if (gSoundOutput.SamplesWritten != -1){
+              gSoundOutput.SamplesWritten += SamplesPassed;
+            }
+            if (gSoundOutput.SamplesWritten >= gSoundOutput.Playing->SampleCount) {
+              // Done playing a sound
+              gSoundOutput.Playing = NULL;
+              gSoundOutput.SamplesWritten = 0;
+            }
+          }
 
           VOID *Region1;
           DWORD Region1Size;
           VOID *Region2;
           DWORD Region2Size;
 
-          if (PositionFound && SUCCEEDED(gSoundBuffer->Lock(
-                                   ByteToLock, BytesToWrite, &Region1,
-                                   &Region1Size, &Region2, &Region2Size, 0))) {
-            DWORD Region1SampleCount = Region1Size / BytesPerSample;
-            DWORD Region2SampleCount = Region2Size / BytesPerSample;
+          if (SUCCEEDED(gSoundBuffer->Lock(WriteCursor, BytesToWrite, &Region1,
+                                           &Region1Size, &Region2, &Region2Size,
+                                           DSBLOCK_FROMWRITECURSOR))) {
+            int Region1SampleCount = Region1Size / BytesPerSample;
+            int Region2SampleCount = Region2Size / BytesPerSample;
 
-            i16 *SampleOut = (i16 *)Region1;
-            for (DWORD SampleIndex = 0; SampleIndex < Region1SampleCount;
-                 SampleIndex++) {
-              if (SquareWaveCounter <= 0) {
-                SquareWaveCounter = SquareWavePeriod;
-              }
-              i16 SampleValue =
-                  SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
-              *SampleOut++ = SampleValue;
-              *SampleOut++ = SampleValue;
-              SquareWaveCounter--;
+            u32 *CopyFrom = NULL;
+            int SamplesToCopy = 0;
+            if (gSoundOutput.Playing) {
+              int Offset = gSoundOutput.SamplesWritten >= 0 ? gSoundOutput.SamplesWritten : 0;
+              CopyFrom = (u32 *)gSoundOutput.Playing->Samples + Offset;
+              SamplesToCopy = gSoundOutput.Playing->SampleCount - Offset;
             }
 
-            SampleOut = (i16 *)Region2;
-            for (DWORD SampleIndex = 0; SampleIndex < Region2SampleCount;
+            u32 *SampleOut = (u32 *)Region1;
+            for (int SampleIndex = 0; SampleIndex < Region1SampleCount;
                  SampleIndex++) {
-              if (SquareWaveCounter <= 0) {
-                SquareWaveCounter = SquareWavePeriod;
+
+              if (SamplesToCopy > 0) {
+                *SampleOut = *CopyFrom;
+                SamplesToCopy--;
+                CopyFrom++;
+              } else {
+                *SampleOut = 0;  // Fill with zeroes
               }
-              i16 SampleValue =
-                  SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
-              *SampleOut++ = SampleValue;
-              *SampleOut++ = SampleValue;
-              SquareWaveCounter--;
+
+              SampleOut++;
+            }
+
+            // copypaste
+            SampleOut = (u32 *)Region2;
+            for (int SampleIndex = 0; SampleIndex < Region2SampleCount;
+                 SampleIndex++) {
+
+              if (SamplesToCopy > 0) {
+                *SampleOut = *CopyFrom;
+                SamplesToCopy--;
+                CopyFrom++;
+              } else {
+                *SampleOut = 0;  // Fill with zeroes
+              }
+
+              SampleOut++;
+            }
+
+            gSoundBuffer->Unlock(Region1, Region1Size, Region2, Region2Size);
+
+            if (gSoundOutput.Playing && gSoundOutput.SamplesWritten == -1) {
+              gSoundOutput.SamplesWritten = 0;
             }
           }
         }

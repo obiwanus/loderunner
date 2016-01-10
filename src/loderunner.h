@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-
 #include "loderunner_platform.h"
 #include "loderunner_math.h"
 
@@ -105,14 +104,19 @@ struct loaded_sound {
 
 struct game_sound {
   bool32 IsInitialized;
-  int RunningSampleIndex;
-  loaded_sound *Playing;
 
   loaded_sound Crush;
   loaded_sound Death;
   loaded_sound Hooray;
   loaded_sound Pickup;
   loaded_sound Win;
+};
+
+struct platform_sound_output {
+  bool32 IsInitialized;
+  int SamplesWritten;
+  loaded_sound *Playing;
+  u32 LastWritePosition;
 };
 
 struct sprite {
@@ -273,7 +277,6 @@ struct treasure : entity {
 };
 
 struct crushed_brick : entity {
-
   bool32 IsUsed = false;
   int Countdown;
 
@@ -374,9 +377,10 @@ struct game_memory {
 
 // Game functions
 
-#define GAME_UPDATE_AND_RENDER(name)                             \
-  void name(game_input *NewInput, game_offscreen_buffer *Buffer, \
-            game_memory *Memory, bool32 RedrawLevel)
+#define GAME_UPDATE_AND_RENDER(name)                                 \
+  void name(game_input *NewInput, game_offscreen_buffer *Buffer,     \
+            game_memory *Memory, platform_sound_output *SoundOutput, \
+            bool32 RedrawLevel)
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 GAME_UPDATE_AND_RENDER(GameUpdateAndRenderStub) {
   // nothing
