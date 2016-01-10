@@ -9,6 +9,7 @@ global bool32 gClock = true;
 
 global level Level;
 global bmp_file *gImage;
+global game_sound gSound;
 global i32 gScore;
 global bool32 gUpdateScore = true;
 
@@ -287,9 +288,51 @@ internal bmp_file DEBUGReadBMPFile(char const *Filename) {
 }
 
 struct riff_iterator {
-  WAVE_chunk *Chunk;
   u8 *At;
+  u8 *Stop;
 };
+
+inline riff_iterator NextChunk(riff_iterator Iter) {
+  WAVE_chunk *Chunk = (WAVE_chunk *)Iter.At;
+  // Pad if odd
+  u32 Size = (Chunk->Size + 1) & ~1;
+  Iter.At += sizeof(WAVE_chunk) + Size;
+  return Iter;
+}
+
+inline internal riff_iterator ParseChunkAt(void *At, void *Stop) {
+  riff_iterator Iter;
+
+  Iter.At = (u8 *)At;
+  Iter.Stop = (u8 *)Stop;
+
+  return Iter;
+}
+
+inline bool32 ChunkIsValid(riff_iterator Iter) {
+  bool32 Result = (Iter.At < Iter.Stop);
+  return Result;
+}
+
+inline void *GetChunkData(riff_iterator Iter) {
+  void *Result = Iter.At + sizeof(WAVE_chunk);
+
+  return Result;
+}
+
+inline u32 GetChunkDataSize(riff_iterator Iter) {
+  WAVE_chunk *Chunk = (WAVE_chunk *)Iter.At;
+  u32 Result = Chunk->Size;
+
+  return Result;
+}
+
+inline u32 GetChunkType(riff_iterator Iter) {
+  WAVE_chunk *Chunk = (WAVE_chunk *)Iter.At;
+  u32 Result = Chunk->ID;
+
+  return Result;
+}
 
 internal loaded_sound ReadWAVFile(char const *Filename) {
   loaded_sound Result = {};
@@ -303,6 +346,33 @@ internal loaded_sound ReadWAVFile(char const *Filename) {
   Assert(Header->RIFFID == WAVE_ChunkID_RIFF);
   Assert(Header->WAVEID == WAVE_ChunkID_WAVE);
 
+  void *SampleData = 0;
+  u32 SampleDataSize = 0;
+  WAVE_fmt *fmt = 0;
+
+  for (riff_iterator Iter = ParseChunkAt(Header + 1, (u8 *)(Header + 1) + Header->Size - 4); ChunkIsValid(Iter); Iter = NextChunk(Iter)) {
+    switch (GetChunkType(Iter)) {
+      case WAVE_ChunkID_fmt: {
+        fmt = (WAVE_fmt *)GetChunkData(Iter);
+        Assert(fmt->wFormatTag == 1);  // PCM
+        Assert(fmt->nSamplesPerSec == 44100);
+        Assert(fmt->nChannels == 2);
+        Assert(fmt->wBitsPerSample == 16);
+        Assert(fmt->nBlockAlign == 2 * fmt->nChannels);
+      } break;
+
+      case WAVE_ChunkID_data: {
+        SampleData = GetChunkData(Iter);
+        SampleDataSize = GetChunkDataSize(Iter);
+      } break;
+    };
+  }
+
+  Assert(SampleData != 0 && SampleDataSize != 0);
+
+  Result.Samples = SampleData;
+  Result.SampleCount = SampleDataSize / (fmt->nChannels * sizeof(u16));
+  Result.SamplesPerSec = fmt->nSamplesPerSec;
 
   return Result;
 }
@@ -1198,9 +1268,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   GameBackBuffer = Buffer;
   GameMemory = Memory;
 
+  loaded_sound Sound = ReadWAVFile("death.wav");
+
   // Load sprites
   if (gImage == NULL) {
     gImage = LoadSprite("img/sprites.bmp");
+  }
+
+  // Load sounds
+  if (!gSound.IsInitialized) {
+    gSound.IsInitialized = true;
+    gSound.Crush = ReadWAVFile("crush.wav");
+    gSound.Death = ReadWAVFile("death.wav");
+    gSound.Hooray = ReadWAVFile("hooray.wav");
+    gSound.Pickup = ReadWAVFile("pickup.wav");
+    gSound.Win = ReadWAVFile("win.wav");
   }
 
   // Init level

@@ -94,10 +94,25 @@ enum {
   WAVE_ChunkID_fmt = RIFF_CODE('f', 'm', 't', ' '),
   WAVE_ChunkID_RIFF = RIFF_CODE('R', 'I', 'F', 'F'),
   WAVE_ChunkID_WAVE = RIFF_CODE('W', 'A', 'V', 'E'),
+  WAVE_ChunkID_data = RIFF_CODE('d', 'a', 't', 'a'),
 };
 
 struct loaded_sound {
+  void *Samples;
+  int SampleCount;
+  int SamplesPerSec;
+};
 
+struct game_sound {
+  bool32 IsInitialized;
+  int RunningSampleIndex;
+  loaded_sound *Playing;
+
+  loaded_sound Crush;
+  loaded_sound Death;
+  loaded_sound Hooray;
+  loaded_sound Pickup;
+  loaded_sound Win;
 };
 
 struct sprite {

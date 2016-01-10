@@ -397,7 +397,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             WAVEFORMATEX WaveFormat = {};
             WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
             WaveFormat.nChannels = 2;
-            WaveFormat.nSamplesPerSec = 48000;
+            WaveFormat.nSamplesPerSec = 44100;
             WaveFormat.wBitsPerSample = 16;
             WaveFormat.nBlockAlign =
                 (WaveFormat.nChannels * WaveFormat.wBitsPerSample) / 8;
@@ -425,7 +425,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             DSBUFFERDESC BufferDescription = {};
             BufferDescription.dwSize = sizeof(BufferDescription);
             BufferDescription.dwFlags = 0;
-            BufferDescription.dwBufferBytes = 48000 * sizeof(i16);
+            BufferDescription.dwBufferBytes = 44100 * sizeof(i16);
             BufferDescription.lpwfxFormat = &WaveFormat;
 
             if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription,
@@ -434,6 +434,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             }
           }
         }
+        gSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);
       }
 
       LARGE_INTEGER LastTimestamp = Win32GetWallClock();
@@ -522,40 +523,53 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         // DirectSound output test
         {
-          int SquareWaveCounter = 0;
-          int SquareWavePeriod = 48000 / 256;  // Approx middle C
+          local_persist u32 RunningSampleIndex = 0;
+          int BufferSize = 44100 * sizeof(i16);
+          int SquareWaveCounter = RunningSampleIndex % BufferSize;
+          int SquareWavePeriod = 44100 / 256;  // Approx middle C
           int BytesPerSample = sizeof(i16) * 2;
 
-          DWORD WritePointer = 0;
-          DWORD BytesToWrite = 0;
+
+          DWORD PlayCursor;
+          DWORD WriteCursor;
+          bool32 PositionFound = SUCCEEDED(
+              gSoundBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor));
+
+          DWORD BytesToWrite = BufferSize;
+          DWORD ByteToLock = RunningSampleIndex * BytesPerSample % BufferSize;
 
           VOID *Region1;
           DWORD Region1Size;
           VOID *Region2;
           DWORD Region2Size;
 
-          if (SUCCEEDED(gSoundBuffer->Lock(WritePointer, BytesToWrite, &Region1, &Region1Size,
-                             &Region2, &Region2Size, 0))) {
+          if (PositionFound && SUCCEEDED(gSoundBuffer->Lock(
+                                   ByteToLock, BytesToWrite, &Region1,
+                                   &Region1Size, &Region2, &Region2Size, 0))) {
             DWORD Region1SampleCount = Region1Size / BytesPerSample;
             DWORD Region2SampleCount = Region2Size / BytesPerSample;
 
             i16 *SampleOut = (i16 *)Region1;
-            for (DWORD SampleIndex = 0; SampleIndex < Region1SampleCount; SampleIndex++) {
+            for (DWORD SampleIndex = 0; SampleIndex < Region1SampleCount;
+                 SampleIndex++) {
               if (SquareWaveCounter <= 0) {
                 SquareWaveCounter = SquareWavePeriod;
               }
-              i16 SampleValue = SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
+              i16 SampleValue =
+                  SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
               *SampleOut++ = SampleValue;
               *SampleOut++ = SampleValue;
               SquareWaveCounter--;
             }
 
             SampleOut = (i16 *)Region2;
-            for (DWORD SampleIndex = 0; SampleIndex < Region2SampleCount; SampleIndex++) {
+            for (DWORD SampleIndex = 0; SampleIndex < Region2SampleCount;
+                 SampleIndex++) {
               if (SquareWaveCounter <= 0) {
                 SquareWaveCounter = SquareWavePeriod;
               }
-              i16 SampleValue = SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
+              i16 SampleValue =
+                  SquareWaveCounter > (SquareWavePeriod / 2) ? 16000 : -16000;
               *SampleOut++ = SampleValue;
               *SampleOut++ = SampleValue;
               SquareWaveCounter--;
