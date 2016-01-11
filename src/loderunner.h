@@ -315,7 +315,7 @@ typedef enum {
 } water_point;
 
 const int kCrushedBrickCount = 30;
-const int kMaxRespawnCount = 4;
+const int kMaxRespawnCount = 10;
 
 struct level {
   bool32 IsInitialized;

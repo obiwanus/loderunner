@@ -22,6 +22,7 @@ global bool GlobalRunning;
 
 global game_memory GameMemory;
 global game_offscreen_buffer GameBackBuffer;
+global platform_sound_output gSoundOutput;
 global XImage *gXImage;
 
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
@@ -107,7 +108,8 @@ int main(int argc, char const *argv[]) {
   XSetStandardProperties(display, window, "My Window", "Hi!", None, NULL, 0,
                          NULL);
 
-  XSelectInput(display, window, ExposureMask | KeyPressMask | ButtonPressMask);
+  XSelectInput(display, window,
+               ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask);
   XMapRaised(display, window);
 
   Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
@@ -197,16 +199,20 @@ int main(int argc, char const *argv[]) {
       char symbol = 0;
       bool32 pressed = false;
       bool32 released = false;
+      bool32 retriggered = false;
 
       XNextEvent(display, &event);
 
+      if (XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
+        symbol = buf[0];
+      }
+
       // Process user input
       if (event.type == KeyPress) {
-        if (XLookupString(&event.xkey, buf, 255, &key, 0) == 1) {
-          symbol = buf[0];
-        }
+        printf("Key pressed\n");
         pressed = true;
       }
+
       if (event.type == KeyRelease) {
         if (XEventsQueued(display, QueuedAfterReading)) {
           XEvent nev;
@@ -216,13 +222,14 @@ int main(int argc, char const *argv[]) {
               nev.xkey.keycode == event.xkey.keycode) {
             // Ignore. Key wasn't actually released
             printf("Key release ignored\n");
-          } else {
-            released = true;
+            XNextEvent(display, &event);
+            retriggered = true;
           }
         }
-        else {
-          released = true;
+
+        if (!retriggered) {
           printf("Key released\n");
+          released = true;
         }
       }
 
@@ -252,7 +259,10 @@ int main(int argc, char const *argv[]) {
       }
     }
 
-    Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory);
+    bool32 RedrawLevel = false;
+
+    Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory, &gSoundOutput,
+                         RedrawLevel);
 
     // Swap inputs
     game_input *TmpInput = OldInput;

@@ -186,7 +186,7 @@ void DrawTile(int Col, int Row) {
   }
 }
 
-void DrawText(char *String, int X, int Y) {
+void DrawText(const char *String, int X, int Y) {
   v2i Position = {};
   Position.x = X;
   Position.y = Y;
