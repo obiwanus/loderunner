@@ -6,6 +6,7 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>  // usleep
 #include <time.h>
 #include <limits.h>
@@ -25,10 +26,29 @@ global game_offscreen_buffer GameBackBuffer;
 global platform_sound_output gSoundOutput;
 global XImage *gXImage;
 
+internal void LinuxGetExeDir(char *PathToExe) {
+  readlink("/proc/self/exe", PathToExe, PATH_MAX);
+
+  // Cut the file name
+  char *OnePastLastSlash = PathToExe;
+  for (char *Scan = PathToExe; *Scan; Scan++) {
+    if (*Scan == '/') {
+      OnePastLastSlash = Scan + 1;
+    }
+  }
+  *OnePastLastSlash = 0;
+}
+
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
 
-  FILE *f = fopen(Filename, "rb");
+  char PathToExe[PATH_MAX];
+  LinuxGetExeDir(PathToExe);
+
+  char FilePath[PATH_MAX];
+  sprintf(FilePath, "%sdata/%s", PathToExe, Filename)
+
+  FILE *f = fopen(FilePath, "rb");
   if (f == NULL) {
     printf("Cannot open file: %s\n", Filename);
     exit(1);
