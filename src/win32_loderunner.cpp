@@ -28,10 +28,37 @@ global bool32 gRedrawLevel;
 
 typedef HRESULT WINAPI directsound_create(LPCGUID, LPDIRECTSOUND *, LPUNKNOWN);
 
+#define GAME_CODE_DLL_FILENAME "gamelib.dll"
+
+internal void Win32GetExeDir(char *PathToExe) {
+  GetModuleFileName(0, PathToExe, MAX_PATH);
+
+  // Cut the file name
+  char *OnePastLastSlash = PathToExe;
+  for (char *Scan = PathToExe; *Scan; Scan++) {
+    if (*Scan == '\\') {
+      OnePastLastSlash = Scan + 1;
+    }
+  }
+  *OnePastLastSlash = 0;
+}
+
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
   file_read_result Result = {};
 
-  HANDLE FileHandle = CreateFile(Filename, GENERIC_READ, FILE_SHARE_READ, 0,
+  char FilePath[MAX_PATH];
+
+  char ExeDir[MAX_PATH];
+  Win32GetExeDir(ExeDir);
+  sprintf_s(FilePath, "%sdata/%s", ExeDir, Filename);
+
+  // for (int i = 0; i < MAX_PATH; i++) {
+  //   char c = FilePath[i];
+  //   if (c == '\0') break;
+  //   if (c == '/') FilePath[i] = '\\';
+  // }
+
+  HANDLE FileHandle = CreateFile(FilePath, GENERIC_READ, FILE_SHARE_READ, 0,
                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
   if (FileHandle != INVALID_HANDLE_VALUE) {
@@ -179,21 +206,6 @@ Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
 
   return Result;
-}
-
-#define GAME_CODE_DLL_FILENAME "loderunner.dll"
-
-internal void Win32GetExeDir(char *PathToExe) {
-  GetModuleFileName(0, PathToExe, MAX_PATH);
-
-  // Cut the file name
-  char *OnePastLastSlash = PathToExe;
-  for (char *Scan = PathToExe; *Scan; Scan++) {
-    if (*Scan == '\\') {
-      OnePastLastSlash = Scan + 1;
-    }
-  }
-  *OnePastLastSlash = 0;
 }
 
 internal FILETIME Win32GetDLLWriteTime() {
@@ -369,8 +381,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     const int kWindowHeight = 1000;
 
     HWND Window = CreateWindow(WindowClass.lpszClassName, 0,
-                               WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT,
-                               CW_USEDEFAULT, kWindowWidth, kWindowHeight, 0, 0,
+                               WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100,
+                               50, kWindowWidth, kWindowHeight, 0, 0,
                                hInstance, 0);
 
     // We're not going to release it as we use CS_OWNDC
@@ -382,7 +394,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DeleteObject(BgBrush);
 
     // Fullscreen by default
-    Win32ToggleFullscreen(Window);
+    // Win32ToggleFullscreen(Window);
 
     if (Window) {
       GlobalRunning = true;

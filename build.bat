@@ -19,7 +19,8 @@ REM 32-bit build
 REM cl %CommonCompilerFlags% ..\loderunner\src\win32_loderunner.cpp /link -subsystem:windows,5.1 %CommonLinkerFlags%
 
 REM 64-bit build
-cl %CommonCompilerFlags% ..\loderunner\src\loderunner.cpp -LD /link -incremental:no -PDB:loderunner_%random%.pdb /EXPORT:GameUpdateAndRender
+
+cl %CommonCompilerFlags% ..\loderunner\src\loderunner.cpp -LD /link -incremental:no -PDB:loderunner_%random%.pdb /EXPORT:GameUpdateAndRender -OUT:gamelib.dll
 cl %CommonCompilerFlags% ..\loderunner\src\win32_loderunner.cpp /link %CommonLinkerFlags%
 
 popd

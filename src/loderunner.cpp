@@ -1399,6 +1399,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     LevelString[0] = (char)('0' + ((Level.Index + 1) / 10) % 10);
     DrawText(LevelString, (Level.Width - 2) * kTileWidth, LevelBottomY);
     gUpdateScore = true;
+
+    // DrawText("iliok", 17 * kTileWidth, LevelBottomY);
   }
 
   // Draw score
