@@ -500,6 +500,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
       // Main loop
       while (GlobalRunning) {
+#if BUILD_INTERNAL
         FILETIME NewDLLWriteTime = Win32GetDLLWriteTime();
         int CMP = CompareFileTime(&LastDLLWriteTime, &NewDLLWriteTime);
         if (CMP != 0) {
@@ -507,6 +508,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           Game = Win32LoadGameCode();
           LastDLLWriteTime = NewDLLWriteTime;
         }
+#endif
 
         // Collect input
         Win32ProcessPendingMessages(NewInput);
