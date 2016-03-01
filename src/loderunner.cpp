@@ -7,6 +7,9 @@ global game_memory *GameMemory;
 
 global bool32 gClock = true;
 global bool32 gDeadWait = 0;
+global bool32 gShowMenu = false;
+global int gSelectedLevel = 1;
+global int gMenuKeyPressCooldown = 0;
 
 global level Level;
 global bmp_file *gImage;
@@ -264,6 +267,18 @@ void DrawText(const char *String, int X, int Y) {
 
     Position.x += kTileWidth;
   }
+}
+
+internal void DrawNumber(int Number, int TileX, int TileY) {
+  // Only 2 digit numbers are supported
+  int Digit1 = Number % 10;
+  int Digit2 = (Number / 10) % 10;
+
+  char String[3] = "00";
+  String[2] = 0;
+  String[1] = (char)('0' + Digit1);
+  String[0] = (char)('0' + Digit2);
+  DrawText(String, TileX * kTileWidth, TileY * kTileHeight);
 }
 
 internal bmp_file DEBUGReadBMPFile(char const *Filename) {
@@ -1283,6 +1298,10 @@ void UpdatePerson(person *Person, bool32 IsEnemy, int Speed, bool32 PressedUp,
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
+  //======================================================
+  // Initialise stuff
+  //======================================================
+
   // Update global vars
   GameBackBuffer = Buffer;
   GameMemory = Memory;
@@ -1303,11 +1322,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
   }
   gSoundOutput = SoundOutput;
 
-  // Init level
+  // Init first level
   if (!Level.IsInitialized) {
     Level.Index = 0;
 
     LoadLevel(Level.Index);
+  }
+
+  if (NewInput->Players[0].Menu.EndedDown) {
+    gShowMenu = true;
+    RedrawLevel = true;
+    gMenuKeyPressCooldown = 10;
   }
 
   if (RedrawLevel || (!Level.IsDrawn && Level.TileBeingDrawn == 0)) {
@@ -1326,6 +1351,131 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
           (Top * GameBackBuffer->Width + Left) * GameBackBuffer->BytesPerPixel;
     }
   }
+
+  //======================================================
+  // Show menu
+  //======================================================
+
+  if (gShowMenu) {
+    DrawText("select level", 5 * kTileWidth, 5 * kTileHeight);
+    DrawText("close lode runner", 5 * kTileWidth, 19 * kTileHeight);
+
+    int NumbersInRow = 5;
+    int Row = 0;
+    int Col = 0;
+
+    // Draw level numbers
+    for (int i = 1; i < kLevelCount; i++) {
+      DrawNumber(i, 5 + Col * 3, 9 + Row * 3);
+      Col++;
+
+      if (Col == NumbersInRow) {
+        Row++;
+        Col = 0;
+      }
+    }
+
+    // Get input
+    player_input *Input = &NewInput->Players[0];
+
+    bool32 PressedUp = Input->Up.EndedDown;
+    bool32 PressedDown = Input->Down.EndedDown;
+    bool32 PressedLeft = Input->Left.EndedDown;
+    bool32 PressedRight = Input->Right.EndedDown;
+    bool32 PressedFire = Input->Fire.EndedDown;
+    bool32 PressedMenu = Input->Menu.EndedDown;
+
+    bool32 PressedAnyKey =
+        PressedDown || PressedUp || PressedLeft || PressedRight;
+
+    if (gSelectedLevel > 0 && PressedAnyKey && gMenuKeyPressCooldown == 0) {
+      if (PressedDown) {
+        if (gSelectedLevel + NumbersInRow <= kLevelCount - 1 ||
+            (gSelectedLevel - 1) / NumbersInRow ==
+                (kLevelCount - 1 - 1) / NumbersInRow) {
+          gSelectedLevel += NumbersInRow;
+        }
+        else {
+          gSelectedLevel = kLevelCount - 1;
+        }
+      }
+      if (PressedUp) {
+        gSelectedLevel -= NumbersInRow;
+      }
+      if (PressedRight) {
+        gSelectedLevel += 1;
+      }
+      if (PressedLeft) {
+        gSelectedLevel -= 1;
+      }
+
+      if (gSelectedLevel < 0 || gSelectedLevel > kLevelCount - 1) {
+        gSelectedLevel = 0;
+      }
+      gMenuKeyPressCooldown = 10;
+    } else if (gSelectedLevel == 0 && PressedAnyKey &&
+               gMenuKeyPressCooldown == 0) {
+      if (PressedDown || PressedRight) {
+        gSelectedLevel = 1;
+      }
+      if (PressedUp) {
+        gSelectedLevel = ((kLevelCount - 1) / NumbersInRow) * NumbersInRow + 1;
+      }
+      if (PressedLeft) {
+        gSelectedLevel = kLevelCount - 1;
+      }
+      gMenuKeyPressCooldown = 10;
+    }
+
+    if (PressedFire && gMenuKeyPressCooldown == 0) {
+      if (gSelectedLevel == 0) {
+        return 1;
+      } else {
+        Level.Index = gSelectedLevel - 1;
+        LoadLevel(Level.Index);
+        gShowMenu = false;
+        return 0;
+      }
+    }
+
+    // TODO: fix the bugs with missing people and not redrawing
+
+    if (PressedMenu && gMenuKeyPressCooldown == 0) {
+      gShowMenu = false;
+      return 0;
+    }
+
+    if (gMenuKeyPressCooldown > 0) {
+      gMenuKeyPressCooldown--;
+    }
+
+    // Draw cursor
+    if (gSelectedLevel > 0) {
+      int SelectedCol = (gSelectedLevel - 1) % NumbersInRow;
+      int SelectedRow = (gSelectedLevel - 1) / NumbersInRow;
+      int X = (5 + SelectedCol * 3) * kTileWidth;
+      int Y = (9 + SelectedRow * 3) * kTileHeight;
+      DrawSprite({X - 8, Y - 8}, 10, 10, 224, 160);
+      DrawSprite({X - 8, Y + kTileHeight - 2}, 10, 10, 224, 160 + 22);
+      DrawSprite({X + kTileWidth * 2 - 2, Y - 8}, 10, 10, 224 + 22, 160);
+      DrawSprite({X + kTileWidth * 2 - 2, Y + kTileHeight - 2}, 10, 10,
+                 224 + 22, 160 + 22);
+    } else {
+      int X = 5 * kTileWidth;
+      int Y = 19 * kTileHeight;
+      DrawSprite({X - 8, Y - 8}, 10, 10, 224, 160);
+      DrawSprite({X - 8, Y + kTileHeight - 2}, 10, 10, 224, 160 + 22);
+      DrawSprite({X + kTileWidth * 17 - 2, Y - 8}, 10, 10, 224 + 22, 160);
+      DrawSprite({X + kTileWidth * 17 - 2, Y + kTileHeight - 2}, 10, 10,
+                 224 + 22, 160 + 22);
+    }
+
+    return 0;  // don't go further
+  }
+
+  //======================================================
+  // Draw level
+  //======================================================
 
   bool32 DrawFooter = false;
 
@@ -1354,7 +1504,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
     if (!Level.IsDrawn) {
       // if still not drawn
-      return;
+      return 0;
     }
   }
 
@@ -1382,7 +1532,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       Level.IsDisappearing = false;
       LoadLevel(Level.Index);
     }
-    return;
+    return 0;
   }
 
   if (DrawFooter) {
@@ -1425,6 +1575,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
              Level.Height * kTileHeight + kTileHeight / 4 + kTileHeight - 4);
   }
 
+  //======================================================
+  // Updates
+  //======================================================
+
   // Update players
   for (int i = 0; i < 2; i++) {
     player *Player = &Level.Players[i];
@@ -1454,9 +1608,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (Player->IsDead && gDeadWait <= 0) {
       gClock = true;
       Level.IsDisappearing = true;
-      return;
+      return 0;
     }
-    if (!gClock) return;
+    if (!gClock) return 0;
 
     ErasePerson(Player);
 
@@ -1811,6 +1965,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     }
   }
 
+  //======================================================
+  // Draw moving stuff
+  //======================================================
+
   // Update and draw treasures
   for (int i = 0; i < Level.TreasureCount; i++) {
     treasure *Treasure = &Level.Treasures[i];
@@ -1976,4 +2134,5 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
   }
+  return 0;
 }

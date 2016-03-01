@@ -50,7 +50,12 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
 
   char ExeDir[MAX_PATH];
   Win32GetExeDir(ExeDir);
+
+#if BUILD_INTERNAL
+  sprintf_s(FilePath, "%s", Filename);
+#else
   sprintf_s(FilePath, "%sdata/%s", ExeDir, Filename);
+#endif
 
   // for (int i = 0; i < MAX_PATH; i++) {
   //   char c = FilePath[i];
@@ -289,9 +294,6 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
         if ((VKCode == VK_F4) && AltKeyWasDown) {
           GlobalRunning = false;
         }
-        if (VKCode == VK_ESCAPE) {
-          // GlobalRunning = false;
-        }
 
         // Get input
         if (IsDown != WasDown) {
@@ -305,6 +307,10 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player1->Right, IsDown);
           } else if (VKCode == VK_SPACE) {
             Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
+          } else if (VKCode == VK_RETURN) {
+            Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
+          }  else if (VKCode == VK_ESCAPE) {
+            Win32ProcessKeyboardMessage(&Player1->Menu, IsDown);
           } else if (VKCode == 'W') {
             Win32ProcessKeyboardMessage(&Player2->Up, IsDown);
           } else if (VKCode == 'S') {
@@ -514,8 +520,12 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         Win32ProcessPendingMessages(NewInput);
         NewInput->dtForFrame = TargetMSPF;
 
-        Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory,
-                             &gSoundOutput, gRedrawLevel);
+        int Result = Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory,
+                                          &gSoundOutput, gRedrawLevel);
+        if (Result > 0) {
+          GlobalRunning = false;
+        }
+
         if (gRedrawLevel) {
           gRedrawLevel = false;
         }

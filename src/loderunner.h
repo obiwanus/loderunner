@@ -148,7 +148,7 @@ struct game_button_state {
   bool32 EndedDown;
 };
 
-#define INPUT_BUTTON_COUNT 7
+#define INPUT_BUTTON_COUNT 8
 
 struct player_input {
   union {
@@ -162,6 +162,7 @@ struct player_input {
       game_button_state Fire;
       game_button_state Turbo;
       game_button_state Debug;
+      game_button_state Menu;
       // NOTE: don't forget to update the number above
       // if you add a new state
     };
@@ -377,13 +378,14 @@ struct game_memory {
 
 // Game functions
 
-#define GAME_UPDATE_AND_RENDER(name)                                 \
-  void name(game_input *NewInput, game_offscreen_buffer *Buffer,     \
-            game_memory *Memory, platform_sound_output *SoundOutput, \
-            bool32 RedrawLevel)
+#define GAME_UPDATE_AND_RENDER(name)                                \
+  int name(game_input *NewInput, game_offscreen_buffer *Buffer,     \
+           game_memory *Memory, platform_sound_output *SoundOutput, \
+           bool32 RedrawLevel)
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 GAME_UPDATE_AND_RENDER(GameUpdateAndRenderStub) {
   // nothing
+  return 0;
 }
 
 #endif  // LODERUNNER_H
