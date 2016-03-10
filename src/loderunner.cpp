@@ -416,6 +416,7 @@ void LoadLevel(int Index) {
   Level.IsDrawn = false;
   Level.TileBeingDrawn = 0;
   gUpdateScore = true;
+  gClock = true;
 
   // Init disappearing animation
   {
@@ -1329,8 +1330,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     LoadLevel(Level.Index);
   }
 
-  if (NewInput->Players[0].Menu.EndedDown) {
-    gShowMenu = true;
+  // Tick the dead wait timer early to let it go if the menu is shown
+  if (gDeadWait > 0) {
+    gDeadWait--;
+  }
+
+  if (NewInput->Player1.Menu.EndedDown) {
+    // Switch it off immediately
+    NewInput->Player1.Menu.EndedDown = false;
+    gShowMenu = !gShowMenu;
     RedrawLevel = true;
     gMenuKeyPressCooldown = 10;
   }
@@ -1438,13 +1446,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
       }
     }
 
-    // TODO: fix the bugs with missing people and not redrawing
-
-    if (PressedMenu && gMenuKeyPressCooldown == 0) {
-      gShowMenu = false;
-      return 0;
-    }
-
     if (gMenuKeyPressCooldown > 0) {
       gMenuKeyPressCooldown--;
     }
@@ -1486,6 +1487,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         DrawTile(Col, Row);
       }
     }
+    Level.IsDrawn = true;
     DrawFooter = true;
   }
 
@@ -1600,10 +1602,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     bool32 PressedAnyKey =
         PressedFire || PressedDown || PressedUp || PressedLeft || PressedRight;
-
-    if (gDeadWait > 0) {
-      gDeadWait--;
-    }
 
     if (Player->IsDead && gDeadWait <= 0) {
       gClock = true;
