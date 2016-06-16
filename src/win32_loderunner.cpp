@@ -469,6 +469,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         PIXELFORMATDESCRIPTOR DesiredPixelFormat = {};
         DesiredPixelFormat.nSize = sizeof(DesiredPixelFormat);
         DesiredPixelFormat.nVersion = 1;
+        DesiredPixelFormat.iPixelType = PFD_TYPE_RGBA;
         DesiredPixelFormat.dwFlags =
             PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
         DesiredPixelFormat.cColorBits = 32;
