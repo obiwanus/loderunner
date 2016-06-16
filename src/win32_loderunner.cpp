@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <intrin.h>
 #include <dsound.h>
+#include <gl/gl.h>
 
 struct win32_game_code {
   HMODULE GameCodeDLL;
@@ -93,10 +94,15 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
 }
 
 internal void Win32UpdateWindow(HDC hdc) {
-  StretchDIBits(hdc, 0, 0, GameBackBuffer.Width, GameBackBuffer.Height,  // dest
-                0, 0, GameBackBuffer.Width, GameBackBuffer.Height,       // src
-                GameBackBuffer.Memory, &GlobalBitmapInfo, DIB_RGB_COLORS,
-                SRCCOPY);
+
+  // StretchDIBits(hdc, 0, 0, GameBackBuffer.Width, GameBackBuffer.Height,  // dest
+  //               0, 0, GameBackBuffer.Width, GameBackBuffer.Height,       // src
+  //               GameBackBuffer.Memory, &GlobalBitmapInfo, DIB_RGB_COLORS,
+  //               SRCCOPY);
+  glViewport(0, 0, GameBackBuffer.Width, GameBackBuffer.Height);
+  glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  SwapBuffers(hdc);
 }
 
 void Win32ToggleFullscreen(HWND hwnd) {
@@ -309,7 +315,7 @@ internal void Win32ProcessPendingMessages(game_input *NewInput) {
             Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
           } else if (VKCode == VK_RETURN) {
             Win32ProcessKeyboardMessage(&Player1->Fire, IsDown);
-          }  else if (VKCode == VK_ESCAPE) {
+          } else if (VKCode == VK_ESCAPE) {
             Win32ProcessKeyboardMessage(&Player1->Menu, IsDown);
           } else if (VKCode == 'W') {
             Win32ProcessKeyboardMessage(&Player2->Up, IsDown);
@@ -387,9 +393,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     const int kWindowHeight = 1000;
 
     HWND Window = CreateWindow(WindowClass.lpszClassName, 0,
-                               WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100,
-                               50, kWindowWidth, kWindowHeight, 0, 0,
-                               hInstance, 0);
+                               WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100, 50,
+                               kWindowWidth, kWindowHeight, 0, 0, hInstance, 0);
 
     // We're not going to release it as we use CS_OWNDC
     HDC hdc = GetDC(Window);
@@ -400,7 +405,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DeleteObject(BgBrush);
 
     // Fullscreen by default
-    // Win32ToggleFullscreen(Window);
+    Win32ToggleFullscreen(Window);
 
     if (Window) {
       GlobalRunning = true;
@@ -446,7 +451,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             DSBUFFERDESC BufferDescription = {};
             BufferDescription.dwSize = sizeof(BufferDescription);
             BufferDescription.dwFlags = 0;
-            BufferDescription.dwBufferBytes = 44100 * sizeof(i16) * 2;  // 1 second
+            BufferDescription.dwBufferBytes =
+                44100 * sizeof(i16) * 2;  // 1 second
             BufferDescription.lpwfxFormat = &WaveFormat;
 
             if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription,
@@ -456,6 +462,34 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           }
         }
         gSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+      }
+
+      // Init OpenGL
+      {
+        PIXELFORMATDESCRIPTOR DesiredPixelFormat = {};
+        DesiredPixelFormat.nSize = sizeof(DesiredPixelFormat);
+        DesiredPixelFormat.nVersion = 1;
+        DesiredPixelFormat.dwFlags =
+            PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
+        DesiredPixelFormat.cColorBits = 32;
+        DesiredPixelFormat.cAlphaBits = 8;
+        DesiredPixelFormat.iLayerType = PFD_MAIN_PLANE;
+
+        int SuggestedPixelFormatIndex =
+            ChoosePixelFormat(hdc, &DesiredPixelFormat);
+        PIXELFORMATDESCRIPTOR SuggestedPixelFormat;
+        DescribePixelFormat(hdc, SuggestedPixelFormatIndex,
+                            sizeof(SuggestedPixelFormat),
+                            &SuggestedPixelFormat);
+
+        SetPixelFormat(hdc, SuggestedPixelFormatIndex, &SuggestedPixelFormat);
+
+        HGLRC OpenGLRC = wglCreateContext(hdc);
+        if (wglMakeCurrent(hdc, OpenGLRC)) {
+        } else {
+          // Something's wrong
+          Assert(false);
+        }
       }
 
       LARGE_INTEGER LastTimestamp = Win32GetWallClock();
@@ -520,8 +554,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         Win32ProcessPendingMessages(NewInput);
         NewInput->dtForFrame = TargetMSPF;
 
-        int Result = Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory,
-                                          &gSoundOutput, gRedrawLevel);
+        int Result =
+            Game.UpdateAndRender(NewInput, &GameBackBuffer, &GameMemory,
+                                 &gSoundOutput, gRedrawLevel);
         if (Result > 0) {
           GlobalRunning = false;
         }
@@ -553,7 +588,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         DWORD WriteCursor;
         if (SUCCEEDED(
                 gSoundBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor))) {
-
           int BytesPerSample = sizeof(i16) * 2;
           int SamplesPerSecond = 44100;
           int BufferSize = SamplesPerSecond * BytesPerSample;
@@ -578,10 +612,11 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           gSoundOutput.LastWritePosition = WriteCursor;
 
           if (gSoundOutput.Playing != NULL) {
-            if (gSoundOutput.SamplesWritten != -1){
+            if (gSoundOutput.SamplesWritten != -1) {
               gSoundOutput.SamplesWritten += SamplesPassed;
             }
-            if (gSoundOutput.SamplesWritten >= gSoundOutput.Playing->SampleCount) {
+            if (gSoundOutput.SamplesWritten >=
+                gSoundOutput.Playing->SampleCount) {
               // Done playing a sound
               gSoundOutput.Playing = NULL;
               gSoundOutput.SamplesWritten = 0;
@@ -602,7 +637,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             u32 *CopyFrom = NULL;
             int SamplesToCopy = 0;
             if (gSoundOutput.Playing) {
-              int Offset = gSoundOutput.SamplesWritten >= 0 ? gSoundOutput.SamplesWritten : 0;
+              int Offset = gSoundOutput.SamplesWritten >= 0
+                               ? gSoundOutput.SamplesWritten
+                               : 0;
               CopyFrom = (u32 *)gSoundOutput.Playing->Samples + Offset;
               SamplesToCopy = gSoundOutput.Playing->SampleCount - Offset;
             }
@@ -610,7 +647,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             u32 *SampleOut = (u32 *)Region1;
             for (int SampleIndex = 0; SampleIndex < Region1SampleCount;
                  SampleIndex++) {
-
               if (SamplesToCopy > 0) {
                 *SampleOut = *CopyFrom;
                 SamplesToCopy--;
@@ -626,7 +662,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             SampleOut = (u32 *)Region2;
             for (int SampleIndex = 0; SampleIndex < Region2SampleCount;
                  SampleIndex++) {
-
               if (SamplesToCopy > 0) {
                 *SampleOut = *CopyFrom;
                 SamplesToCopy--;

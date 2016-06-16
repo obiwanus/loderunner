@@ -1343,7 +1343,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     gMenuKeyPressCooldown = 10;
   }
 
-  if (RedrawLevel || (!Level.IsDrawn && Level.TileBeingDrawn == 0)) {
+  if (RedrawLevel || gShowMenu || (!Level.IsDrawn && Level.TileBeingDrawn == 0)) {
     // Fill background
     u32 *Pixel = (u32 *)GameBackBuffer->Memory;
     for (int i = 0; i < GameBackBuffer->Width * GameBackBuffer->Height; i++) {
