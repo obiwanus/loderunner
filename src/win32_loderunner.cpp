@@ -15,7 +15,8 @@ struct win32_game_code {
 
 global bool GlobalRunning;
 
-global BITMAPINFO GlobalBitmapInfo;
+// global BITMAPINFO GlobalBitmapInfo;
+global GLuint gTextureHandle;
 global LARGE_INTEGER GlobalPerformanceFrequency;
 global WINDOWPLACEMENT gWindowPlacement = {sizeof(gWindowPlacement)};
 global bool32 gFullscreen;
@@ -94,14 +95,58 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
 }
 
 internal void Win32UpdateWindow(HDC hdc) {
-
-  // StretchDIBits(hdc, 0, 0, GameBackBuffer.Width, GameBackBuffer.Height,  // dest
-  //               0, 0, GameBackBuffer.Width, GameBackBuffer.Height,       // src
+  // StretchDIBits(hdc, 0, 0, GameBackBuffer.Width, GameBackBuffer.Height,
+  //               0, 0, GameBackBuffer.Width, GameBackBuffer.Height,
   //               GameBackBuffer.Memory, &GlobalBitmapInfo, DIB_RGB_COLORS,
   //               SRCCOPY);
+
+
   glViewport(0, 0, GameBackBuffer.Width, GameBackBuffer.Height);
-  glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+
+  glEnable(GL_TEXTURE_2D);
+
+  glBindTexture(GL_TEXTURE_2D, gTextureHandle);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, GameBackBuffer.Width,
+               GameBackBuffer.Height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+               GameBackBuffer.Memory);  // GL_RGBA
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
+
+  glMatrixMode(GL_TEXTURE);
+  glLoadIdentity();
+
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+
+  glBegin(GL_TRIANGLES);
+
+  glTexCoord2f(0.0f, 1.0f);
+  glVertex2i(-1, -1);
+  glTexCoord2f(1.0f, 1.0f);
+  glVertex2i(1, -1);
+  glTexCoord2f(1.0f, 0.0f);
+  glVertex2i(1, 1);
+
+  glTexCoord2f(0.0f, 1.0f);
+  glVertex2i(-1, -1);
+  glTexCoord2f(0.0f, 0.0f);
+  glVertex2i(-1, 1);
+  glTexCoord2f(1.0f, 0.0f);
+  glVertex2i(1, 1);
+
+  glEnd();
+
   SwapBuffers(hdc);
 }
 
@@ -152,8 +197,8 @@ internal void Win32ResizeClientWindow(HWND Window) {
 
   gRedrawLevel = true;
 
-  GlobalBitmapInfo.bmiHeader.biWidth = Width;
-  GlobalBitmapInfo.bmiHeader.biHeight = -Height;
+  // GlobalBitmapInfo.bmiHeader.biWidth = Width;
+  // GlobalBitmapInfo.bmiHeader.biHeight = -Height;
 }
 
 inline LARGE_INTEGER Win32GetWallClock() {
@@ -399,11 +444,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     // We're not going to release it as we use CS_OWNDC
     HDC hdc = GetDC(Window);
 
-    HBRUSH BgBrush = CreateSolidBrush(RGB(0x00, 0x22, 0x22));
-    SelectObject(hdc, BgBrush);
-    PatBlt(hdc, 0, 0, kWindowWidth, kWindowHeight, PATCOPY);
-    DeleteObject(BgBrush);
-
     // Fullscreen by default
     Win32ToggleFullscreen(Window);
 
@@ -487,6 +527,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         HGLRC OpenGLRC = wglCreateContext(hdc);
         if (wglMakeCurrent(hdc, OpenGLRC)) {
+          // Success
+          glGenTextures(1, &gTextureHandle);
         } else {
           // Something's wrong
           Assert(false);
@@ -521,10 +563,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         GameBackBuffer.Memory =
             VirtualAlloc(0, BufferSize, MEM_COMMIT, PAGE_READWRITE);
 
-        GlobalBitmapInfo.bmiHeader.biSize = sizeof(GlobalBitmapInfo.bmiHeader);
-        GlobalBitmapInfo.bmiHeader.biPlanes = 1;
-        GlobalBitmapInfo.bmiHeader.biBitCount = 32;
-        GlobalBitmapInfo.bmiHeader.biCompression = BI_RGB;
+        // GlobalBitmapInfo.bmiHeader.biSize = sizeof(GlobalBitmapInfo.bmiHeader);
+        // GlobalBitmapInfo.bmiHeader.biPlanes = 1;
+        // GlobalBitmapInfo.bmiHeader.biBitCount = 32;
+        // GlobalBitmapInfo.bmiHeader.biCompression = BI_RGB;
 
         // Set up proper values of buffers based on actual client size
         Win32ResizeClientWindow(Window);
