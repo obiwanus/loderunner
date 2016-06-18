@@ -529,6 +529,12 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         if (wglMakeCurrent(hdc, OpenGLRC)) {
           // Success
           glGenTextures(1, &gTextureHandle);
+
+          typedef BOOL WINAPI wgl_swap_interval_ext(int interval);
+          wgl_swap_interval_ext *wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
+          if (wglSwapInterval) {
+            wglSwapInterval(1);
+          }
         } else {
           // Something's wrong
           Assert(false);
@@ -730,33 +736,33 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         // TODO: for some reason Time to sleep drops every now and again,
         // disabling gradient solves or masks this, though I don't see
         // any reason why this might happen
-        {
-          r32 MillisecondsElapsed =
-              Win32GetMillisecondsElapsed(LastTimestamp, Win32GetWallClock());
-          u32 TimeToSleep = 0;
+        // {
+        //   r32 MillisecondsElapsed =
+        //       Win32GetMillisecondsElapsed(LastTimestamp, Win32GetWallClock());
+        //   u32 TimeToSleep = 0;
 
-          if (MillisecondsElapsed < TargetMSPF) {
-            TimeToSleep = (u32)(TargetMSPF - MillisecondsElapsed);
-            Sleep(TimeToSleep);
+        //   if (MillisecondsElapsed < TargetMSPF) {
+        //     TimeToSleep = (u32)(TargetMSPF - MillisecondsElapsed);
+        //     Sleep(TimeToSleep);
 
-            while (MillisecondsElapsed < TargetMSPF) {
-              MillisecondsElapsed = Win32GetMillisecondsElapsed(
-                  LastTimestamp, Win32GetWallClock());
-            }
-          } else {
-            OutputDebugStringA("Frame missed\n");
-          }
+        //     while (MillisecondsElapsed < TargetMSPF) {
+        //       MillisecondsElapsed = Win32GetMillisecondsElapsed(
+        //           LastTimestamp, Win32GetWallClock());
+        //     }
+        //   } else {
+        //     OutputDebugStringA("Frame missed\n");
+        //   }
 
-          LastTimestamp = Win32GetWallClock();
+        //   LastTimestamp = Win32GetWallClock();
 
-          // if (TimeToSleep)
-          // {
-          //     char String[300];
-          //     sprintf_s(String, "Time to sleep: %d, Ms elapsed: %.2f, < 10 =
-          //     %d\n", TimeToSleep, MillisecondsElapsed, TimeToSleep < 10);
-          //     OutputDebugStringA(String);
-          // }
-        }
+        //   // if (TimeToSleep)
+        //   // {
+        //   //     char String[300];
+        //   //     sprintf_s(String, "Time to sleep: %d, Ms elapsed: %.2f, < 10 =
+        //   //     %d\n", TimeToSleep, MillisecondsElapsed, TimeToSleep < 10);
+        //   //     OutputDebugStringA(String);
+        //   // }
+        // }
       }
     }
   } else {
