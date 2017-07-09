@@ -1,5 +1,4 @@
-Lode Runner
------------
+# Lode Runner
 
 A clone of the ZX spectrum version of the famous game.
 
@@ -7,21 +6,21 @@ A clone of the ZX spectrum version of the famous game.
 The enemy AI is smart enough to reach you everywhere provided there exists a path to you.
 In the original game the enemies could be tricked and led astray. Here, you'll have to run for your life!
 
-Build on Windows
-================
+### Build on Windows
 - Download the source code
 - Run build.bat
 
-Build on Linux
-==============
+### Build on Linux
 - Download the source code
 - Run build.sh
 
 Enjoy!
 
-The linux version has no sound.
+*The linux version has no sound*.
 
 Here's how an example level will look like:
+
+```
 
   e t                    |
   =++=++=+++=#======+    |
@@ -44,4 +43,4 @@ Here's how an example level will look like:
       #                          #
       #          p  t            #
 =================================
-
+```
