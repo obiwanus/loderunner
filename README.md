@@ -6,8 +6,9 @@ A clone of the ZX spectrum version of the famous game.
 The enemy AI is smart enough to reach you everywhere provided there exists a path to you.
 In the original game the enemies could be tricked and led astray. Here, you'll have to run for your life!
 
-### Quick demo
-https://www.youtube.com/watch?v=gRzcqaLwChQ
+(click below to see a quick demo)
+
+[![Quick demo](https://img.youtube.com/vi/gRzcqaLwChQ/0.jpg)](https://www.youtube.com/watch?v=gRzcqaLwChQ)
 
 ### Build on Windows
 - Download the source code
