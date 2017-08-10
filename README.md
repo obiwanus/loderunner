@@ -22,7 +22,7 @@ Enjoy!
 
 *The linux version has no sound*.
 
-Here's how an example level will look like:
+Here's what an example level will look like:
 
 ```
 
